@@ -4,6 +4,20 @@ const {
   requireValidate,
 } = require("./functions");
 
+/**
+ * config, sheet field match check
+ * @param {
+ *   Array<{[key: string]: {
+ *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
+ *     required: boolean,
+ *     unique?: boolean,
+ *     regex?: regex,
+ *     checkObj?: string | { [key:string]: string | number }
+ *   }}>
+ * } config 설정
+ * @param {WorkSheet} sheet
+ * @returns {boolean}
+ */
 function fieldValidation(config, sheet) {
   const sheetFields = Object.keys(sheet[0]);
   for (const field of sheetFields) {
@@ -15,7 +29,22 @@ function fieldValidation(config, sheet) {
   return true;
 }
 
-function validate(config, sheet) {
+/**
+ * 유효성 검사
+ * @param {
+ *   Array<{[key: string]: {
+ *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
+ *     required: boolean,
+ *     unique?: boolean,
+ *     regex?: regex,
+ *     checkObj?: string | { [key:string]: string | number }
+ *   }}>
+ * } config 설정
+ * @param {WorkSheet} sheet 시트데이터
+ * @param {{[key:string]: string | number}} option
+ * @returns {Promise<{result: *[], empty_cnt: number, err_cnt: number}> | {result: *[], empty_cnt: number, err_cnt: number}}
+ */
+async function validate(config, sheet, option = {}) {
   // TODO - 데이터를 입력받으면 일단 config field와 sheet field가 일치하는지 확인필요
   const hasFields = fieldValidation(config, sheet);
   if (!hasFields) {
@@ -50,10 +79,11 @@ function validate(config, sheet) {
         continue;
       }
 
-      const [err, resultData] = validateHandler[fieldType](
+      const [err, resultData] = await validateHandler[fieldType](
         key,
         row[key],
         config[field],
+        option,
       );
 
       temp.push(resultData);

@@ -1,8 +1,3 @@
-/**
- * config fields - type, required, regex?, checkObj?
- *
- * types - none, select, range, id, user, tableInfo?(테이블정보)
- */
 module.exports = {
   // 없으면 추가, 수정시 용어의 ID값
   ID: {
@@ -59,46 +54,26 @@ module.exports = {
   },
   현업담당자1: {
     required: true,
-    type: "user",
-    checkObj: {
-      AP020498: 1,
-      FP017190: 1,
-      MP02136: 1,
-      CP017849: 1,
-      AP018013: 1,
-    },
+    type: "select",
+    checkObj: "user",
   },
   현업담당자2: {
     required: false,
-    type: "user",
-    checkObj: {
-      AP020498: 1,
-      FP017190: 1,
-      MP02136: 1,
-      CP017849: 1,
-      AP018013: 1,
-    },
+    type: "select",
+    checkObj: "user",
   },
   업무담당자1: {
     required: false,
-    type: "user",
-    checkObj: {
-      AP020498: 1,
-      FP017190: 1,
-      MP02136: 1,
-      CP017849: 1,
-      AP018013: 1,
-    },
+    type: "select",
+    checkObj: "user",
   },
   업무담당자2: {
     required: false,
-    type: "user",
+    type: "db",
     checkObj: {
-      AP020498: 1,
-      FP017190: 1,
-      MP02136: 1,
-      CP017849: 1,
-      AP018013: 1,
+      dbType: "mongo",
+      collection: "user",
+      findKey: "userId",
     },
   },
   // ','로 구분
@@ -153,9 +128,11 @@ module.exports = {
   // 보고서명(보고서번호.항목명)
   // '.'로 보고서 번호, 항목명 구분
   // const [ reportNumber, itemName ] = data.split('.')
+  // 정규식 테스트
   보고서명: {
     required: false,
-    type: "none",
+    type: "regex",
+    regex: /^[a-zA-Z0-9\u3131-\uD79D]+$/,
   },
   사용자정의항목입력1: {
     required: false,
@@ -184,6 +161,7 @@ module.exports = {
   테스트: {
     required: false,
     type: "range",
+    unique: true,
     checkObj: { start: 1, end: 100 },
   },
 };
