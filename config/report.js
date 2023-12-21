@@ -1,159 +1,65 @@
-const tempIdList = {
-  AP020498: {
-    name: "조명진",
-    team: "기타 협력업체",
-  },
-  FP017190: {
-    name: "김정욱",
-    team: "거버넌스팀",
-  },
-  MP02136: {
-    name: "홍희도",
-    team: "기타 협력업체",
-  },
-  CP017849: {
-    name: "오윤기",
-    team: "기타 협력업체",
-  },
-  AP018013: {
-    name: "이도연",
-    team: "거버넌스팀",
-  },
-};
-
-function isNotValidation(_, data) {
-  return [null, data];
-}
-
-const IS_NOT_NULL_MESSAGE = (field) => `[${field}] 필수 입력값입니다.`;
-const INVALID_VALUE = (field, value) =>
-  `${field}[${value}] 잘못된 입력값입니다.`;
-
-function idValidation(_, data) {
-  if (!data) {
-    return [null, "ID값이 null일 경우 할당되어야 합니다."];
-  }
-
-  return [null, data];
-}
-
-function requiredValidation(key, data) {
-  if (!data || !data.trim()) {
-    const err = {
-      type: "empty",
-      msg: IS_NOT_NULL_MESSAGE(key),
-    };
-
-    return [err, data];
-  }
-
-  return [null, data];
-}
-
-// TODO - 필수값 검증 로직 개선 필요 (user 참고)
-function selectValidation(key, data) {
-  const err = {
-    type: "invalid",
-    msg: INVALID_VALUE(key, data),
-  };
-
-  if (this.required) {
-    const result = requiredValidation(key, data);
-    if (result[0]) {
-      return result;
-    }
-  }
-
-  if (!!data && !this.values.includes(data)) {
-    return [err, data];
-  }
-
-  return [null, data];
-}
-
-function userValidation(key, data) {
-  if (this.required) {
-    const result = requiredValidation(key, data);
-    if (result[0]) {
-      return result;
-    }
-  }
-
-  const user = tempIdList[data];
-
-  const err = {
-    type: "invalid",
-    msg: `${key}[${data}] 사번이 존재하지 않습니다.`,
-  };
-
-  if (!!data && !user) {
-    return [err, data];
-  }
-
-  if (!!user) {
-    data += `(${user.name})(${user.team})`;
-  }
-
-  return [null, data];
-}
-
-// function reportTitleValidation(config, data) {
-//
-// }
-function reportTitleValidation(key, data) {
-  const regex = /^[a-zA-Z0-9\u3131-\uD79D]+$/;
-
-  if (!!data && !regex.test(data)) {
-    const err = {
-      type: "invalid",
-      msg: INVALID_VALUE(key, data),
-    };
-    return [err, data];
-  }
-
-  return [null, data];
-}
-
+/**
+ * config fields - type, required, regex?, checkObj?
+ *
+ * types - none, select, range, id, user, tableInfo?(테이블정보)
+ */
 module.exports = {
+  // 없으면 추가, 수정시 용어의 ID값
   ID: {
-    isEmpty: false,
-    regex: "",
-
-    fn: idValidation,
+    required: false,
+    type: "id",
   },
   비즈용어명: {
-    fn: requiredValidation,
-  },
-  "비즈용어\r\n분류1": {
-    fn: requiredValidation,
-  },
-  "비즈용어\r\n분류2": {
-    fn: isNotValidation,
-  },
-  "비즈용어\r\n분류3": {
-    fn: isNotValidation,
-  },
-  "비즈용어\r\n출처": {
-    values: ["업무용어", "보고서용어"],
     required: true,
-    fn: selectValidation,
   },
-  "비즈용어\r\n유형": {
-    values: ["일반", "계수"],
+  비즈용어분류1: {
     required: true,
-    fn: selectValidation,
+    type: "select",
+    checkObj: {
+      LPOINT: 1,
+      LPAY: 1,
+      PG: 1,
+      채널: 1,
+      보안: 1,
+      업무: 1,
+      통합회원: 1,
+      구매상품: 1,
+      포인트관리: 1,
+      제휴관리: 1,
+      수수료정산: 1,
+      기타: 1,
+    },
   },
-  "사용대상\r\n구분": {
+  비즈용어분류2: {
+    required: false,
+    type: "none",
+  },
+  비즈용어분류3: {
+    required: false,
+    type: "none",
+  },
+  비즈용어출처: {
+    required: true,
+    type: "select",
+    checkObj: { 업무용어: 1, 보고서용어: 1 },
+  },
+  비즈용어유형: {
+    required: true,
+    type: "select",
+    checkObj: { 일반: 1, 계수: 1 },
+  },
+  사용대상구분: {
+    required: true,
+    type: "select",
     checkObj: { 내부: 1, 외부: 1 },
-    required: true,
-    // range:[0,10]
-    fn: selectValidation,
   },
-  "비즈용어 설명": {
-    fn: isNotValidation,
+  비즈용어설명: {
+    required: true,
+    type: "none",
   },
   현업담당자1: {
     required: true,
+    type: "user",
     checkObj: {
       AP020498: 1,
       FP017190: 1,
@@ -161,69 +67,123 @@ module.exports = {
       CP017849: 1,
       AP018013: 1,
     },
-    fn: userValidation,
   },
   현업담당자2: {
-    fn: userValidation,
+    required: false,
+    type: "user",
+    checkObj: {
+      AP020498: 1,
+      FP017190: 1,
+      MP02136: 1,
+      CP017849: 1,
+      AP018013: 1,
+    },
   },
   업무담당자1: {
-    fn: userValidation,
+    required: false,
+    type: "user",
+    checkObj: {
+      AP020498: 1,
+      FP017190: 1,
+      MP02136: 1,
+      CP017849: 1,
+      AP018013: 1,
+    },
   },
   업무담당자2: {
-    fn: userValidation,
+    required: false,
+    type: "user",
+    checkObj: {
+      AP020498: 1,
+      FP017190: 1,
+      MP02136: 1,
+      CP017849: 1,
+      AP018013: 1,
+    },
   },
+  // ','로 구분
   키워드: {
-    fn: requiredValidation,
+    required: true,
+    type: "none",
   },
+  // ','로 구분
   연관어: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
-  "테이블정보\r\n(인스턴스명.스키마명.테이블명.컬럼명) (콤마구분)": {
-    fn: isNotValidation,
+  // 테이블정보(인스턴스명.스키마명.테이블명.컬럼명) (콤마구분)
+  // .split('.') 하여 각 항목 체크 필요 ?
+  // const [ instance, schema, table, column ] = data.split('.')
+  테이블정보: {
+    required: false,
+    type: "none",
   },
   IT용어: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
   산출주기: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
-  "분석관점\r\n산출주기": {
-    fn: isNotValidation,
+  분석관점산출주기: {
+    required: false,
+    type: "none",
   },
   산출범위: {
-    fn: isNotValidation,
+    required: true,
+    type: "none",
   },
   산출기준: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
   원천SQL: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
   정보계SQL: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
   빅데이터SQL: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
   },
-  "보고서 명\r\n(보고서번호.항목명)": {
-    fn: reportTitleValidation,
+  // 보고서명(보고서번호.항목명)
+  // '.'로 보고서 번호, 항목명 구분
+  // const [ reportNumber, itemName ] = data.split('.')
+  보고서명: {
+    required: false,
+    type: "none",
   },
-  "사용자정의항목 입력1": {
-    fn: isNotValidation,
+  사용자정의항목입력1: {
+    required: false,
+    type: "none",
   },
-  "사용자정의항목 입력2": {
-    fn: isNotValidation,
+  사용자정의항목입력2: {
+    required: false,
+    type: "none",
   },
-  "사용자정의항목 입력3": {
-    fn: isNotValidation,
+  사용자정의항목입력3: {
+    required: false,
+    type: "none",
   },
-  "사용자정의항목 입력4": {
-    fn: isNotValidation,
+  사용자정의항목입력4: {
+    required: false,
+    type: "none",
   },
-  "사용자정의항목 입력5": {
-    fn: isNotValidation,
+  사용자정의항목입력5: {
+    required: false,
+    type: "none",
   },
   비고: {
-    fn: isNotValidation,
+    required: false,
+    type: "none",
+  },
+  테스트: {
+    required: false,
+    type: "range",
+    checkObj: { start: 1, end: 100 },
   },
 };
