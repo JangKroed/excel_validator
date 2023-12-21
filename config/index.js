@@ -7,13 +7,13 @@ const {
 /**
  * config, sheet field match check
  * @param {
- *   Array<{[key: string]: {
+ *   {
  *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
  *     required: boolean,
  *     unique?: boolean,
  *     regex?: regex,
  *     checkObj?: string | { [key:string]: string | number }
- *   }}>
+ *   }
  * } config 설정
  * @param {WorkSheet} sheet
  * @returns {boolean}
@@ -32,24 +32,26 @@ function fieldValidation(config, sheet) {
 /**
  * 유효성 검사
  * @param {
- *   Array<{[key: string]: {
+ *   {
  *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
  *     required: boolean,
  *     unique?: boolean,
  *     regex?: regex,
  *     checkObj?: string | { [key:string]: string | number }
- *   }}>
+ *   }
  * } config 설정
  * @param {WorkSheet} sheet 시트데이터
  * @param {{[key:string]: string | number}} option
  * @returns {Promise<{result: *[], empty_cnt: number, err_cnt: number}> | {result: *[], empty_cnt: number, err_cnt: number}}
  */
 async function validate(config, sheet, option = {}) {
-  // TODO - 데이터를 입력받으면 일단 config field와 sheet field가 일치하는지 확인필요
   const hasFields = fieldValidation(config, sheet);
   if (!hasFields) {
     throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
   }
+
+  // TODO - unique hash table setting
+  const uniqueTable = {};
 
   let err_cnt = 0;
   let empty_cnt = 0;
@@ -70,6 +72,21 @@ async function validate(config, sheet, option = {}) {
 
       const field = fieldConvertor(key);
       const fieldType = config[field].type || "none";
+
+      if (config[field].unique === true) {
+        if (uniqueTable[field] && uniqueTable[field][row[key]]) {
+          temp.push(row[key]);
+          msg.push(`${field}[${row[key]}] 중복되지 않아야 하는 데이터 입니다.`);
+          errorHandler.invalid();
+          continue;
+        }
+
+        if (!uniqueTable[field]) {
+          uniqueTable[field] = { [row[key]]: 1 };
+        } else {
+          uniqueTable[field][row[key]] = 1;
+        }
+      }
 
       const isEmpty = requireValidate(field, row[key], config[field].required);
       if (isEmpty) {
