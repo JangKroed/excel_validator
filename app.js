@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const { reportConfig, validate } = require("./config");
+const { client } = require("./config/mongo");
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -16,10 +17,15 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
       throw new Error("not empty file");
     }
 
-    const { originalname, buffer } = req.file;
+    const { originalname, buffer, size } = req.file;
 
     if (originalname.split(".").at(-1) !== "xlsx") {
       throw new Error("지원하지 않는 파일 형식입니다.");
+    }
+
+    const MAX_FILE_SIZE = 1024 * 1024 * 3;
+    if (size > MAX_FILE_SIZE) {
+      throw new Error("최대 3MB 까지 업로드 가능합니다.");
     }
 
     const workbook = XLSX.read(buffer, { type: "buffer" });
@@ -40,7 +46,7 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
       }
 
       const workSheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(workSheet);
+      const data = XLSX.utils.sheet_to_json(workSheet, { defval: "" });
 
       result.data[0] = ["검증결과", ...Object.keys(data[0]).map(modifyingName)];
       result.data[1] = ["결과", ...Object.keys(data[0])];
@@ -51,7 +57,15 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
         result: resultData,
         err_cnt,
         empty_cnt,
-      } = validate(reportConfig, data);
+      } = await validate(reportConfig, data, {
+        user: {
+          AP020498: 1,
+          FP017190: 1,
+          MP02136: 1,
+          CP017849: 1,
+          AP018013: 1,
+        },
+      });
 
       ///////////////////////////////////////////////////////////////////////////
 
@@ -63,10 +77,16 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
     res.status(200).json({ data: result });
   } catch (err) {
     console.error(err);
-    res.status(400).json(err);
+    res.status(400).json({ err });
   }
 });
 
 app.listen(1005, () => {
   console.log("Server Start!");
+  client
+    .connect()
+    .then(() => {
+      console.log("MongoDB Connect!");
+    })
+    .catch(console.error);
 });
