@@ -17,15 +17,15 @@ class Config {
     };
 
     for (const row of sheet) {
-      const temp = [[], []];
+      const temp = [[]];
 
       for (const key in this.config) {
-        const [msg, data] = temp;
+        const [msg] = temp;
         const [err, resultData] = this.config[key].fn(
           key.replace(/\s/g, "").replace(/\([^)]*\)/g, ""),
           row[key],
         );
-        data.push(resultData);
+        temp.push(resultData);
 
         if (!!err) {
           msg.push(err.msg);

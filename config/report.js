@@ -38,7 +38,7 @@ function idValidation(_, data) {
 }
 
 function requiredValidation(key, data) {
-  if (!data.trim()) {
+  if (!data || !data.trim()) {
     const err = {
       type: "empty",
       msg: IS_NOT_NULL_MESSAGE(key),
@@ -50,31 +50,21 @@ function requiredValidation(key, data) {
   return [null, data];
 }
 
+// TODO - 필수값 검증 로직 개선 필요 (user 참고)
 function selectValidation(key, data) {
+  const err = {
+    type: "invalid",
+    msg: INVALID_VALUE(key, data),
+  };
+
   if (this.required) {
-    return requiredValidation(key, data);
+    const result = requiredValidation(key, data);
+    if (result[0]) {
+      return result;
+    }
   }
 
-  if (!this.values.includes(data)) {
-    const err = {
-      type: "invalid",
-      msg: INVALID_VALUE(key, data),
-    };
-
-    return [err, data];
-  }
-
-  return [null, data];
-}
-
-function findUser(key, data) {
-  const user = tempIdList[data];
-  if (!user) {
-    const err = {
-      type: "invalid",
-      msg: `${key}[${data}] 사번이 존재하지 않습니다.`,
-    };
-
+  if (!!data && !this.values.includes(data)) {
     return [err, data];
   }
 
@@ -86,19 +76,30 @@ function userValidation(key, data) {
     const result = requiredValidation(key, data);
     if (result[0]) {
       return result;
-    } else {
-      return findUser(key, data);
     }
   }
 
-  const result = findUser(key, data);
-  if (!!data && result[0]) {
-    return result;
+  const user = tempIdList[data];
+
+  const err = {
+    type: "invalid",
+    msg: `${key}[${data}] 사번이 존재하지 않습니다.`,
+  };
+
+  if (!!data && !user) {
+    return [err, data];
+  }
+
+  if (!!user) {
+    data += `(${user.name})(${user.team})`;
   }
 
   return [null, data];
 }
 
+// function reportTitleValidation(config, data) {
+//
+// }
 function reportTitleValidation(key, data) {
   const regex = /^[a-zA-Z0-9\u3131-\uD79D]+$/;
 
@@ -115,6 +116,9 @@ function reportTitleValidation(key, data) {
 
 module.exports = {
   ID: {
+    isEmpty: false,
+    regex: "",
+
     fn: idValidation,
   },
   비즈용어명: {
@@ -140,8 +144,9 @@ module.exports = {
     fn: selectValidation,
   },
   "사용대상\r\n구분": {
-    values: ["내부", "외부"],
+    checkObj: { 내부: 1, 외부: 1 },
     required: true,
+    // range:[0,10]
     fn: selectValidation,
   },
   "비즈용어 설명": {
@@ -149,6 +154,13 @@ module.exports = {
   },
   현업담당자1: {
     required: true,
+    checkObj: {
+      AP020498: 1,
+      FP017190: 1,
+      MP02136: 1,
+      CP017849: 1,
+      AP018013: 1,
+    },
     fn: userValidation,
   },
   현업담당자2: {
