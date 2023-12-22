@@ -108,6 +108,10 @@ function requireValidate(key, data, required) {
  * @returns {Array<null | {type: string, msg: string} | string>}
  */
 function select(key, data, config, option = {}) {
+  if (!data) {
+    return [null, data];
+  }
+
   const { checkObj } = config;
 
   if (typeof checkObj === "string") {

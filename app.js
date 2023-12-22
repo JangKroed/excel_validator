@@ -1,13 +1,29 @@
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const compression = require("compression");
 const { reportConfig, validate } = require("./config");
 const { client } = require("./config/mongo");
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const compFilter = (req, res) => {
+  // header에 x-no-compression이 있으면, 압축하지 않도록 false를 반환한다.
+  if (req.headers["x-no-compression"]) {
+    return false;
+  }
+  return compression.filter(req, res);
+};
+
 app.use(express.json());
+app.use(
+  compression({
+    level: 6,
+    threshold: 100 * 1000,
+    filter: compFilter,
+  }),
+);
 
 const modifyingName = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
 

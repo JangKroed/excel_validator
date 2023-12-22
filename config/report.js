@@ -36,12 +36,12 @@ module.exports = {
   비즈용어출처: {
     required: true,
     type: "select",
-    checkObj: { 업무용어: 1, 보고서용어: 1 },
+    checkObj: { 업무용어: 1, 보고서용어: 1, 비즈용어: 1 },
   },
   비즈용어유형: {
     required: true,
     type: "select",
-    checkObj: { 일반: 1, 계수: 1 },
+    checkObj: { 일반: 1, 계수: 1, 보고서용어: 1 },
   },
   사용대상구분: {
     required: true,
