@@ -95,19 +95,16 @@ function requireValidate(key, data, required) {
 }
 
 /**
+ * @typedef {Object} Option
+ * @property {Object.<string, string | number>} string
+ */
+
+/**
  * select type validate
  * @param {string} key
  * @param {string} data
- * @param {{
- *   [key: string]: string | boolean | {
- *     [key: string]: string | number
- *   }
- * }} config
- * @param {{
- *   [key: string]: {
- *     [key: string]: string | number
- *   }
- * }} option
+ * @param {Config} config
+ * @param {Option} option
  * @returns {Array<null | {type: string, msg: string} | string>}
  */
 function select(key, data, config, option = {}) {
@@ -136,11 +133,7 @@ function select(key, data, config, option = {}) {
  * range type validate
  * @param {string} key
  * @param {number} data
- * @param {{
- *   [key: string]: string | boolean | {
- *     [key: string]: string | number
- *   }
- * }} config
+ * @param {Config} config
  * @returns {Array<null | {type: string, msg: string} | number>}
  */
 function range(key, data = 0, config) {
@@ -159,11 +152,7 @@ function range(key, data = 0, config) {
  * db type validate
  * @param {string} key
  * @param {string} data
- * @param {{
- *   [key: string]: string | boolean | {
- *     [key: string]: string | number
- *   }
- * }} config
+ * @param {Config} config
  * @returns {Promise<Array<null | {type: string, msg: string} | number>> | Array<null | {type: string, msg: string} | number>}
  */
 async function db(key, data, config) {
@@ -186,11 +175,7 @@ async function db(key, data, config) {
  * regex type validate
  * @param {string} key
  * @param {string} data
- * @param {{
- *   [key: string]: string | boolean | {
- *     [key: string]: string | number
- *   }
- * }} config
+ * @param {Config} config
  * @returns {Array<null | {type: string, msg: string} | string>}
  */
 function regex(key, data, config) {

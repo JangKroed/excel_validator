@@ -5,16 +5,17 @@ const {
 } = require("./functions");
 
 /**
+ * @typedef {Object} Config
+ * @property {'none' | 'id' | 'select' | 'range' | 'db' | 'regex'} type 타입종류
+ * @property {boolean} required 필수여부
+ * @property {boolean} [unique] 유일여부
+ * @property {regex} [regex] 정규식
+ * @property {Object.<string, string | number>} [checkObj] 검사할 데이터
+ */
+
+/**
  * config, sheet field match check
- * @param {
- *   {
- *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
- *     required: boolean,
- *     unique?: boolean,
- *     regex?: regex,
- *     checkObj?: string | { [key:string]: string | number }
- *   }
- * } config 설정
+ * @param {{[key: string]: Config}} config 설정
  * @param {WorkSheet} sheet
  * @returns {boolean}
  */
@@ -31,15 +32,7 @@ function fieldValidation(config, sheet) {
 
 /**
  * 유효성 검사
- * @param {
- *   {
- *     type: 'none' | 'id' | 'select' | 'range' | 'db' | 'regex',
- *     required: boolean,
- *     unique?: boolean,
- *     regex?: regex,
- *     checkObj?: string | { [key:string]: string | number }
- *   }
- * } config 설정
+ * @param {{[key: string]: Config}} config 설정
  * @param {WorkSheet} sheet 시트데이터
  * @param {{[key:string]: string | number}} option
  * @returns {Promise<{result: *[], empty_cnt: number, err_cnt: number}> | {result: *[], empty_cnt: number, err_cnt: number}}

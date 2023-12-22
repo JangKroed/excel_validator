@@ -69,12 +69,14 @@ module.exports = {
   },
   업무담당자2: {
     required: false,
-    type: "db",
-    checkObj: {
-      dbType: "mongo",
-      collection: "user",
-      findKey: "userId",
-    },
+    type: "select",
+    checkObj: "user",
+    // type: "db",
+    // checkObj: {
+    //   dbType: "mongo",
+    //   collection: "user",
+    //   findKey: "userId",
+    // },
   },
   // ','로 구분
   키워드: {

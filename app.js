@@ -53,6 +53,7 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
 
       ///////////////////////////////////////////////////////////////////////////
 
+      console.time("test");
       const {
         result: resultData,
         err_cnt,
@@ -66,6 +67,7 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
           AP018013: 1,
         },
       });
+      console.timeEnd("test");
 
       ///////////////////////////////////////////////////////////////////////////
 
@@ -77,7 +79,7 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
     res.status(200).json({ data: result });
   } catch (err) {
     console.error(err);
-    res.status(400).json({ err });
+    res.status(400).json({ err: err.message });
   }
 });
 
