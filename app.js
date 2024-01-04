@@ -27,6 +27,71 @@ app.use(
 
 const modifyingName = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
 
+/**
+ * 가로 병합된 헤더가 존재하는지 체크 및 데이터 가공
+ * @param {WorkSheet} workSheet
+ * @returns {WorkSheet.rows[]}
+ */
+function headerFilter(workSheet) {
+  let data = XLSX.utils.sheet_to_json(workSheet, {
+    defval: "",
+    header: 1,
+  });
+
+  let isEmpty = false;
+
+  for (const row of data[0]) {
+    if (!row) {
+      isEmpty = true;
+    }
+  }
+
+  if (isEmpty) {
+    const objKeys = data[0];
+    let prev = "";
+    for (let i = 0; i < objKeys.length; i++) {
+      const cur = objKeys[i];
+
+      if (!!cur && !!data[1][i]) {
+        if (cur === "SQL") {
+          objKeys[i] = data[1][i] + cur;
+          prev = cur;
+          continue;
+        }
+
+        objKeys[i] += data[1][i];
+
+        prev = cur;
+      } else if (!cur && data[1][i]) {
+        if (cur === "SQL" || prev === "SQL") {
+          objKeys[i] = data[1][i] + prev;
+          continue;
+        }
+        objKeys[i] = prev + data[1][i];
+      }
+    }
+
+    const newObjKeys = objKeys.map(modifyingName);
+
+    const newData = [];
+
+    for (let i = 2; i < data.length; i++) {
+      const obj = {};
+      for (let j = 0; j < newObjKeys.length; j++) {
+        obj[newObjKeys[j]] = data[i][j];
+      }
+
+      newData.push(obj);
+    }
+
+    return newData;
+  } else {
+    return XLSX.utils.sheet_to_json(workSheet, {
+      defval: "",
+    });
+  }
+}
+
 app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
   try {
     if (!req.file) {
@@ -62,7 +127,12 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
       }
 
       const workSheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(workSheet, { defval: "" });
+      // const data = XLSX.utils.sheet_to_json(workSheet, {
+      //   defval: "",
+      //   header: 1,
+      // });
+
+      const data = headerFilter(workSheet);
 
       result.data[0] = ["검증결과", ...Object.keys(data[0]).map(modifyingName)];
       result.data[1] = ["결과", ...Object.keys(data[0])];
@@ -84,6 +154,7 @@ app.post("/upload", upload.single("excelFile"), async (req, res, next) => {
         },
       });
       console.timeEnd("test");
+      console.log(`현재 실행 중인 Node.js 프로세스의 PID: ${process.pid}`);
 
       ///////////////////////////////////////////////////////////////////////////
 

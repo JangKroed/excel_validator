@@ -20,12 +20,26 @@ const {
  * @returns {boolean}
  */
 function fieldValidation(config, sheet) {
-  const sheetFields = Object.keys(sheet[0]);
+  // 키값이 서로 다를수 있으니 키값을 공백 및 괄호문자 삭제 후 대조하는 작업으로 구성
+  const sheetFields = Object.keys(sheet[0]).map(fieldConvertor);
+  const tempObj = {};
   for (const field of sheetFields) {
-    if (!config[fieldConvertor(field)]) {
+    tempObj[field] = 1;
+  }
+
+  const configFields = Object.keys(config);
+  for (const field of configFields) {
+    if (!tempObj[field]) {
       return false;
     }
   }
+
+  // const sheetFields = Object.keys(sheet[0]);
+  // for (const field of sheetFields) {
+  //   if (!config[fieldConvertor(field)]) {
+  //     return false;
+  //   }
+  // }
 
   return true;
 }
@@ -66,7 +80,7 @@ async function validate(config, sheet, option = {}) {
       const field = fieldConvertor(key);
       const fieldType = config[field].type || "none";
 
-      if (config[field].unique === true) {
+      if (!!row[key] && config[field].unique === true) {
         if (uniqueTable[field] && uniqueTable[field][row[key]]) {
           temp.push(row[key]);
           msg.push(`${field}[${row[key]}] 중복되지 않아야 하는 데이터 입니다.`);

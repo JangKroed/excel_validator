@@ -4,7 +4,7 @@ module.exports = {
     required: false,
     type: "id",
   },
-  비즈용어명: {
+  비즈용어이름: {
     required: true,
   },
   비즈용어분류1: {
@@ -93,7 +93,9 @@ module.exports = {
   // const [ instance, schema, table, column ] = data.split('.')
   테이블정보: {
     required: false,
-    type: "none",
+    type: "regex",
+    regex:
+      /^(?!.*\.{4,})[a-zA-Z0-9\u3131-\uD79D_-]+(\.[a-zA-Z0-9\u3131-\uD79D_-]+){0,4}$/,
   },
   IT용어: {
     required: false,
