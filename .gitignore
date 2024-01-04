@@ -184,6 +184,8 @@ dist
 # *.iml
 # *.ipr
 
+/data
+
 # CMake
 cmake-build-*/
 
