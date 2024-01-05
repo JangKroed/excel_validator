@@ -3,8 +3,8 @@ module.exports.reportConfig = {
     required: false,
     type: "none",
     unique: true,
-    column: "_id", // 'REPORT. + 번호'
-    dataType: "string",
+    column: "none",
+    dataType: "none",
   },
   시스템명: {
     required: true,
@@ -15,9 +15,10 @@ module.exports.reportConfig = {
   },
   보고서번호: {
     required: true,
-    type: "none",
-    column: "dataset_id",
+    type: "id",
+    column: "_id",
     dataType: "string",
+    refer: "REPORT.", // 'REPORT. + 보고서번호'
   },
   // '>'로 구분한 전체 경로를 정규식으로 ?
   보고서경로: {
@@ -97,7 +98,7 @@ module.exports.reportConfig = {
     required: false,
     type: "none",
     column: "calc_range",
-    dataType: "string,5",
+    dataType: "string", // string,5 일때 5는 문자열의 길이제한
   },
   테이블정보: {
     required: false,

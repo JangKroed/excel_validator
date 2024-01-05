@@ -1,55 +1,179 @@
-const {
-  validateHandler,
-  fieldConvertor,
-  requireValidate,
-} = require("./validator.functions");
-// const {businessGlossaryConfig} = require("./config/businessGlossary.config");
+const { ValidateHandler } = require("./validator.functions");
 const { ObjectID } = require("mongodb");
 const moment = require("moment");
 const XLSX = require("xlsx");
 
-class Validator {
+class Validator extends ValidateHandler {
   constructor(config) {
+    super();
     this.config = config;
     this.tempData = {};
+    this.validateHandler = {
+      none: this._none,
+      id: this._id,
+      select: this._select,
+      range: this._range,
+      regex: this._regex,
+    };
   }
 
-  excelValidate(config, sheet, options = {}) {}
+  /**
+   * 유효한 필드인지 검증
+   * @param config
+   * @param sheet
+   * @returns {boolean}
+   * @private
+   */
+  _fieldValidation = (config, sheet) => {
+    const sheetFields = Object.keys(sheet[0]).map(this.fieldConvertor);
+    const tempObj = {};
+    for (const field of sheetFields) {
+      tempObj[field] = 1;
+    }
 
-  async insertData(fileId, col) {
-    /**
-     * TODO !!
-     * this.tempData[fileId]의 데이터를 bulkWrite
-     * 리턴값이 정상이라면 delete this.tempData[fileId]
-     * 실패시 에러
-     */
+    const configFields = Object.keys(config);
 
+    for (const field of configFields) {
+      if (!tempObj[field]) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  /**
+   * 데이터 검증
+   * @param sheet
+   * @param options
+   * @returns {{data: any[], empty_cnt: number, err_cnt: number}}
+   */
+  excelValidate = (sheet, options) => {
+    const hasFields = this._fieldValidation(this.config, sheet);
+    if (!hasFields) {
+      throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
+    }
+
+    const tempTable = [];
+    const uniqueTable = {};
+
+    let err_cnt = 0;
+    let empty_cnt = 0;
+    let warm_cnt = 0;
+
+    const result = new Array(2);
+    result[0] = ["검증결과", ...Object.keys(sheet[0]).map(this.fieldConvertor)];
+    result[1] = ["결과", ...Object.keys(sheet[0])];
+
+    const errorHandler = {
+      invalid: () => err_cnt++,
+      empty: () => empty_cnt++,
+      warm: () => warm_cnt,
+    };
+
+    for (const row of sheet) {
+      const temp = [[]];
+
+      for (const key in row) {
+        const [msg] = temp;
+
+        const field = this.fieldConvertor(key);
+        const fieldType = this.config[field].type || "none";
+
+        // unique validation
+        if (!!row[key] && this.config[field].unique === true) {
+          if (uniqueTable[field] && uniqueTable[field][row[key]]) {
+            temp.push(row[key]);
+            msg.push(
+              `${field}[${row[key]}] 중복되지 않아야 하는 데이터 입니다.`,
+            );
+            errorHandler.invalid();
+            continue;
+          }
+
+          if (!uniqueTable[field]) {
+            uniqueTable[field] = { [row[key]]: 1 };
+          } else {
+            uniqueTable[field][row[key]] = 1;
+          }
+        }
+
+        // require validation
+        const isEmpty = this.requireValidate(
+          field,
+          row[key],
+          this.config[field].required,
+        );
+        if (isEmpty) {
+          temp.push(isEmpty[1]);
+          msg.push(isEmpty[0].msg);
+          errorHandler[isEmpty[0].type]();
+          continue;
+        }
+
+        const [err, resultData] = this.validateHandler[fieldType](
+          key,
+          row[key],
+          this.config[field],
+          options,
+        );
+
+        temp.push(resultData);
+
+        if (!!err) {
+          msg.push(err.msg);
+          errorHandler[err.type]();
+        }
+      }
+
+      result.push(temp);
+
+      // if (!err_cnt && !empty_cnt && !warm_cnt) {
+      tempTable.push(this._excelDataProcessing(row, options));
+      // }
+    }
+
+    // if (!err_cnt && !empty_cnt && !warm_cnt) {
+    this.tempData[options.fileId] = tempTable;
+    console.log(tempTable);
+    // }
+
+    return { data: result, err_cnt, empty_cnt };
+  };
+
+  /**
+   * 데이터 저장
+   * @param fileId
+   * @param col
+   * @returns {Promise<void>}
+   */
+  insertData = async (fileId, col) => {
     try {
-      const items = this.tempData[fileId];
-
-      await this._mongoBulkUpsert(col, items);
+      // const bulkUpdateOps = [];
+      console.log("insert!", this.tempData[fileId][0]);
+      delete this.tempData[fileId];
+      // for (const item of this.tempData[fileId]) {
+      //   bulkUpdateOps.push({
+      //     updateOne: {
+      //       filter: { _id: item._id },
+      //       update: { $set: { ...item } },
+      //       upsert: true,
+      //     },
+      //   });
+      // }
+      //
+      // await col.bulkWrite(bulkUpdateOps);
     } catch (err) {
       console.error(err);
     }
-  }
+  };
 
-  async _mongoBulkUpsert(col, items) {
-    const bulkUpdateOps = [];
-    for (const item of items) {
-      bulkUpdateOps.push({
-        updateOne: {
-          filter: { _id: item._id },
-          update: { $set: { ...item } },
-          upsert: true,
-        },
-      });
-    }
-
-    await col.bulkWrite(bulkUpdateOps).catch(console.error);
-    return "success";
-  }
-
-  headerFilter(workSheet) {
+  /**
+   * 병합된 헤더가 존재하는지 체크 및 데이터 가공
+   * @param workSheet
+   * @returns {unknown[]|*[]}
+   */
+  headerFilter = (workSheet) => {
     let data = XLSX.utils.sheet_to_json(workSheet, {
       defval: "",
       dateNF: "yyyy-mm-dd hh:mm:ss",
@@ -92,7 +216,7 @@ class Validator {
         }
       }
 
-      const newObjKeys = objKeys.map(this._fieldConvertor);
+      const newObjKeys = objKeys.map(this.fieldConvertor);
 
       const newData = [];
 
@@ -114,264 +238,94 @@ class Validator {
         blankrows: false,
       });
     }
-  }
-
-  _fieldValidation(config, sheet) {
-    const sheetFields = Object.keys(sheet[0]).map(this._fieldConvertor);
-    const tempObj = {};
-    for (const field of sheetFields) {
-      tempObj[field] = 1;
-    }
-
-    const configFields = Object.keys(config);
-
-    for (const field of configFields) {
-      if (!tempObj[field]) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  _fieldConvertor = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
-
-  _modifyingName = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
-}
-
-/**
- * config, sheet field match check
- */
-
-/**
- * 공백, 괄호, \s 제거
- */
-const modifyingName = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
-
-/**
- * 유효성 검사
- */
-function fileValidate2(config, sheet, option = {}) {
-  const hasFields = fieldValidation(config, sheet);
-  if (!hasFields) {
-    throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
-  }
-
-  // TODO - unique hash table setting
-  const uniqueTable = {};
-
-  let err_cnt = 0;
-  let empty_cnt = 0;
-
-  const result = new Array(2);
-  result[0] = ["검증결과", ...Object.keys(sheet[0]).map(modifyingName)];
-  result[1] = ["결과", ...Object.keys(sheet[0])];
-
-  const errorHandler = {
-    invalid: () => err_cnt++,
-    empty: () => empty_cnt++,
   };
 
-  // 각 데이터를 순회하며 데이터 검증
-  for (const row of sheet) {
-    const temp = [[]];
+  /**
+   * sheet.row를 MongoDB schema 형식으로 가공
+   * @param row
+   * @param options
+   * @returns {{asset_type, status: string}}
+   * @private
+   */
+  _excelDataProcessing(row, options) {
+    const { refer, asset_type } = options;
 
-    for (const key in row) {
-      const [msg] = temp;
-
-      const field = fieldConvertor(key);
-      const fieldType = config[field].type || "none";
-
-      if (!!row[key] && config[field].unique === true) {
-        if (uniqueTable[field] && uniqueTable[field][row[key]]) {
-          temp.push(row[key]);
-          msg.push(`${field}[${row[key]}] 중복되지 않아야 하는 데이터 입니다.`);
-          errorHandler.invalid();
-          continue;
-        }
-
-        if (!uniqueTable[field]) {
-          uniqueTable[field] = { [row[key]]: 1 };
-        } else {
-          uniqueTable[field][row[key]] = 1;
-        }
-      }
-
-      const isEmpty = requireValidate(field, row[key], config[field].required);
-      if (isEmpty) {
-        temp.push(isEmpty[1]);
-        msg.push(isEmpty[0].msg);
-        errorHandler[isEmpty[0].type]();
-        continue;
-      }
-
-      const [err, resultData] = validateHandler[fieldType](
-        key,
-        row[key],
-        config[field],
-        option,
-      );
-
-      temp.push(resultData);
-
-      if (!!err) {
-        msg.push(err.msg);
-        errorHandler[err.type]();
-      }
-    }
-
-    result.push(temp);
-  }
-
-  return { data: result, err_cnt, empty_cnt };
-}
-
-function excelDataProcessing(config, sheet, option) {
-  const { token_info, refer, asset_type } = option;
-
-  const dataList = [];
-  const tempList = [];
-
-  const date = new moment().toDate();
-  const { USER_ID, USER_NM, DEPT_ID, DEPT_NM } = token_info;
-  for (const row of sheet) {
-    /**
-     * TODO - term 변수 이름 data로 변경
-     * asset_type은 인자로 받아 적용
-     * asset_type별 id 생성로직 변경
-     * asset_type이 dp_term일때 histories 생성후 return { terms: data, histories }
-     */
-
+    const dateTime = new moment().toDate();
     const data = {
       asset_type: asset_type,
       status: "검토완료",
     };
 
-    // TODO - term부터 완성 시킨다
     for (const key in row) {
-      const configKey = modifyingName(key);
+      const configKey = this.fieldConvertor(key);
+      const config = this.config[configKey];
 
-      if (key === "ID") {
+      if (config.column === "_id") {
+        /**
+         * _id가 없으면 new ObjectID().toString()
+         * if (!config.refer) config.refer + row[key]
+         * else
+         */
+
+        if (!row[key]) {
+          row[key] = new ObjectID().toString();
+        }
+
+        if (!config.refer) {
+          data._id = row[key];
+        } else {
+          data._id = config.refer + row[key];
+          data.child_descs = "";
+          data.child_names = "";
+          data.child_tags = "";
+        }
+
+        data.dataset_id = row[key];
+
+        if (!refer.includes(row[key])) {
+          data.resistered = dateTime;
+        } else {
+          data.updated = dateTime;
+        }
+
         continue;
       }
 
-      // if (typeof row[key] === 'string') {
-      //     row[key] = row[key].replace(/[\n\r]/g, '')
-      // }
-
       const stringSplit = row[key].split(",");
 
-      switch (config[configKey].dataType) {
+      switch (config.dataType) {
+        case "none":
+          break;
         case "string":
-          data[config[configKey].column] = row[key] || "";
+          data[config.column] = row[key] || "";
           break;
         case "user":
-          const [deptId, deptName, userId, username] =
-            config[configKey].column.split(",");
+          const [deptId, deptName, userId, username] = config.column.split(",");
 
-          if (!row[key].length) {
+          if (!row[key].length || !options.user[row[key]]) {
             data[deptId] = "";
             data[deptName] = "";
             data[userId] = "";
             data[username] = "";
           } else {
-            data[deptId] = option.user[row[key]].DEPT_ID;
-            data[deptName] = option.user[row[key]].DEPT_NM;
-            data[userId] = option.user[row[key]].USER_ID;
-            data[username] = option.user[row[key]].USER_NM;
+            data[deptId] = options.user[row[key]].DEPT_ID;
+            data[deptName] = options.user[row[key]].DEPT_NM;
+            data[userId] = options.user[row[key]].USER_ID;
+            data[username] = options.user[row[key]].USER_NM;
           }
           break;
         case "array":
-          if (configKey === "테이블정보") {
-            const [tb_ids, col_ids] = config[configKey].column.split(",");
-            const ids = row[key].split(",");
-            data[tb_ids] = ids;
-
-            if (!!col_ids) {
-              data[col_ids] = ids.map((item) => {
-                return {
-                  dataset_id: item,
-                  col_name: item.split(".").at(-1),
-                };
-              });
-            }
-          } else {
-            data[config[configKey].column] = !row[key] ? [] : stringSplit;
-          }
+          data[config.column] = !row[key] ? [] : stringSplit;
           break;
         default:
           throw new Error("유효하지 않은 타입입니다.");
       }
     }
 
-    switch (asset_type) {
-      case "dp_term":
-        // TODO - row.ID 있는지 확인 후 로직 추가 필요
-        // new 필드는 _id가 있으면 'N', 없으면 'Y'로 할당 후
-        // _id를 uuid() 또는 new ObjectId().toString() 할당
-        if (!row.ID) {
-          row.ID = new ObjectID().toString();
-        }
-
-        // TODO - histories -> tempArray 변경 후 비즈용어 타입일때 생성 후 리턴
-        const history = {
-          user_id: USER_ID,
-          user_nm: USER_NM,
-          dept_id: DEPT_ID,
-          dept_nm: DEPT_NM,
-          event_time: date,
-        };
-        if (!refer.includes(row.ID)) {
-          // dpasset.asset_type = 'dp_data' 데이터에 없는경우
-          data.resistered = date;
-          history.event = "add";
-        } else {
-          data.updated = date;
-          history.event = "mod";
-        }
-
-        data._id = row.ID;
-        data.dataset_id = row.ID;
-        history._id = row.ID;
-        history.item = data;
-
-        dataList.push(data);
-        tempList.push(history);
-        break;
-      case "report":
-        data._id = "REPORT." + data._id;
-        tempList.push(data._id);
-        break;
-      case "report_column":
-        delete data.status;
-        break;
-      case "interface":
-        break;
-      default:
-        throw new Error("유효하지 않은 타입입니다.");
-    }
-  }
-
-  switch (asset_type) {
-    case "dp_term":
-      console.log("histories", tempList);
-      throw new Error("sdfasdfasdfasdf");
-      return { terms: dataList, histories: tempList };
-    case "report":
-      return { data: dataList, report_ids: tempList };
-    case "report_column":
-    case "interface":
-    default:
-      throw new Error("유효하지 않은 타입입니다.");
+    return data;
   }
 }
 
-/**
- * 가로 병합된 헤더가 존재하는지 체크 및 데이터 가공
- */
-
 module.exports = {
-  fileValidate2,
-  excelDataProcessing,
   Validator,
 };

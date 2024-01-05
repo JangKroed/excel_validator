@@ -1,10 +1,6 @@
 const path = require("path");
 const XLSX = require("xlsx");
-const {
-  fileValidate2,
-  headerFilter,
-  excelDataProcessing,
-} = require("../common/utils/validate/validator");
+const { Validator } = require("../common/utils/validate/validator");
 const { users } = require("../common/utils/data/users");
 const { client } = require("../config/mongo");
 const {
@@ -14,7 +10,11 @@ require("dotenv").config();
 
 const { FILE_ROOT } = process.env;
 
-const temp = {};
+const { excelValidate, headerFilter, insertData } = new Validator(dpTermConfig);
+
+const db = client.db("dp");
+
+const ASSET_TYPE = "dp_term";
 
 async function uploadXls(req, res, next) {
   try {
@@ -55,18 +55,35 @@ async function uploadXls(req, res, next) {
 
     const user = users;
 
-    const Standard = client.db("dp").collection("standard");
+    const Standard = db.collection("standard");
     const [termsResult] = await Standard.aggregate([
       { $match: { _id: "terms_category" } },
       { $group: { _id: "$children.value" } },
     ]).toArray();
     const term = termsResult._id.filter((e) => !!e);
 
+    const Dpasset = db.collection("dpasset");
+    const refer = await Dpasset.aggregate([
+      { $match: { asset_type: ASSET_TYPE } },
+      { $project: { _id: 1 } },
+      { $project: { _id: { $objectToArray: "$$ROOT" } } },
+      { $unwind: "$_id" },
+      { $group: { _id: "$_id.v" } },
+    ]).toArray();
+
+    const options = {
+      user,
+      term,
+      fileId: name,
+      refer: refer.map((e) => e._id),
+      asset_type: ASSET_TYPE,
+    };
+
     const {
       data: resultData,
       err_cnt,
       empty_cnt,
-    } = fileValidate2(dpTermConfig, data, { user, term });
+    } = excelValidate(data, options);
 
     const result = {
       file_name: originalname,
@@ -75,9 +92,6 @@ async function uploadXls(req, res, next) {
       err_cnt,
       empty_cnt,
     };
-
-    temp[name] = resultData.length;
-    console.log(temp);
 
     res.status(201).json({ data: result });
   } catch (err) {
@@ -89,51 +103,9 @@ async function DataUpdateFile(req, res, next) {
   try {
     const { file_id } = req.body;
 
-    const db = client.db("dp");
     const Dpasset = db.collection("dpasset");
-    const DpTermHistory = db.collection("dp_term_histroy");
-    const dirPath = path.join(FILE_ROOT, file_id);
 
-    const workBook = XLSX.readFile(dirPath, {
-      type: "binary",
-      cellDates: true,
-      cellNF: false,
-      cellText: false,
-    });
-
-    if (workBook.SheetNames.length !== 2) {
-      throw new Error(
-        "포맷이 틀립니다 시트1(TABLE), 시트2(컬럼) 으로 구성해주세요",
-      );
-    }
-
-    const data = headerFilter(workBook.Sheets[workBook.SheetNames[1]]);
-
-    const user = users;
-
-    const refer = await Dpasset.aggregate([
-      { $match: { asset_type: "dp_term" } },
-      { $project: { _id: 1 } },
-      { $project: { _id: { $objectToArray: "$$ROOT" } } },
-      { $unwind: "$_id" },
-      { $group: { _id: "$_id.v" } },
-    ]).toArray();
-
-    const option = {
-      user,
-      token_info: req.token_info,
-      refer: refer.map((e) => e._id),
-    };
-
-    const { terms, histories } = excelDataProcessing(
-      dpTermConfig,
-      data,
-      option,
-    );
-
-    // TODO - terms, histories bulk upsert
-    // await mongoBulkUpsert(collection, terms)
-    // await mongoBulkUpsert(history_collection, histories)
+    await insertData(file_id, Dpasset);
 
     res.status(200).send("SUCCESS");
   } catch (err) {

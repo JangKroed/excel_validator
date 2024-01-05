@@ -6,6 +6,7 @@ module.exports.dpTermConfig = {
     type: "id",
     column: "_id",
     dataType: "string",
+    refer: null,
   },
   비즈용어명: {
     type: "none",
