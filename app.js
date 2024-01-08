@@ -1,6 +1,8 @@
 const express = require("express");
 const compression = require("compression");
 const { client } = require("./config/mongo");
+const fs = require("fs");
+require("dotenv").config();
 
 const app = express();
 
@@ -31,3 +33,18 @@ app.listen(1005, () => {
     })
     .catch(console.error);
 });
+
+// (() => {
+//   fs.readdir(process.env.FILE_ROOT, (err, files) => {
+//     if (err) {
+//       console.error("폴더를 읽을 수 없습니다.", err);
+//       return;
+//     }
+//
+//     if (files.length) {
+//       for (const file of files) {
+//         fs.unlinkSync(`${process.env.FILE_ROOT}/${file}`);
+//       }
+//     }
+//   });
+// })();
