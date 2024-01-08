@@ -112,54 +112,56 @@ class ValidateHandler {
       return [null, data];
     }
 
-    let errType = "invalid";
+    let { checkObj } = config;
 
-    const { checkObj } = config;
-
+    // checkObj가 string일 경우 option 에서 참조하므로 checkObj에 재할당
     if (typeof checkObj === "string") {
       if (!option[checkObj]) {
         throw new Error(`${key}: ${data} - ${checkObj} is option invalid!})`);
       }
 
-      if (Array.isArray(option[checkObj])) {
-        // TODO - data.split(',').length > 1 일때 로직 추가 필요
-        const isSeveral = data.split(",");
-        if (isSeveral.length > 1) {
-          let isInvalid = false;
-          for (const item of isSeveral) {
-            if (!option[checkObj].includes(item)) {
-              isInvalid = true;
-              break;
-            }
-          }
-
-          if (isInvalid) {
-            return [this._err(key, data, errType), data];
-          } else {
-            return [null, data];
-          }
-        }
-
-        if (option[checkObj].includes(data)) {
-          return [null, data];
-        } else {
-          return [this._err(key, data, errType), data];
-        }
-      }
-
-      if (!option[checkObj][data.trim()]) {
-        return [this._err(key, data, errType), data];
+      // option[checkObj]의 "123,456,789" 형식일때
+      if (this._isSplit(option[checkObj])) {
+        checkObj = option[checkObj].split(",");
       } else {
-        return [null, data];
+        checkObj = option[checkObj];
       }
     }
 
-    if (!checkObj[data.trim()] && !checkObj.includes(data.trim())) {
-      return [this._err(key, data, errType), data];
+    let isInvalid = false;
+
+    for (const item of data.split(",")) {
+      // checkObj가 Array타입일때
+      if (this._isArray(checkObj) && !checkObj.includes(item)) {
+        isInvalid = true;
+        break;
+      }
+
+      // checkObj가 Object타입일때
+      if (this._isObject(checkObj) && !checkObj[item]) {
+        isInvalid = true;
+        break;
+      }
+    }
+
+    if (isInvalid) {
+      return [this._err(key, data, "invalid"), data];
     }
 
     return [null, data];
   };
+
+  _isSplit(target) {
+    return typeof target === "string" && target.split(",").length > 1;
+  }
+
+  _isArray(target) {
+    return Array.isArray(target);
+  }
+
+  _isObject(target) {
+    return !Array.isArray(target) && typeof target === "object";
+  }
 
   /**
    * range type validate

@@ -33,9 +33,6 @@ class Validator extends ValidateHandler {
 
     const configFields = Object.keys(config);
 
-    console.log(sheetFields);
-    console.log(configFields);
-
     for (const field of configFields) {
       if (!tempObj[field]) {
         return false;
@@ -138,7 +135,7 @@ class Validator extends ValidateHandler {
 
     // if (!err_cnt && !empty_cnt && !warm_cnt) {
     this.tempData[options.fileId] = tempTable;
-    console.log(tempTable);
+    // console.log(tempTable);
     // }
 
     return { data: result, err_cnt, empty_cnt };
@@ -321,7 +318,7 @@ class Validator extends ValidateHandler {
           data[config.column] = !row[key] ? [] : stringSplit;
           break;
         default:
-          console.log(config.dataType);
+          // console.log(config.dataType);
           throw new Error("유효하지 않은 타입입니다.");
       }
     }
