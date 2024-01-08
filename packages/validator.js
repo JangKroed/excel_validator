@@ -1,4 +1,4 @@
-const { ValidateHandler } = require("./validator.functions");
+const { ValidateHandler } = require("./utils");
 const { ObjectID } = require("mongodb");
 const moment = require("moment");
 const XLSX = require("xlsx");
@@ -8,39 +8,8 @@ class Validator extends ValidateHandler {
     super();
     this.config = config;
     this.tempData = {};
-    this.validateHandler = {
-      none: this._none,
-      id: this._id,
-      select: this._select,
-      range: this._range,
-      regex: this._regex,
-    };
+    this.MAX_FILE_SIZE = 1024 * 1024 * 3;
   }
-
-  /**
-   * 유효한 필드인지 검증
-   * @param config
-   * @param sheet
-   * @returns {boolean}
-   * @private
-   */
-  _fieldValidation = (config, sheet) => {
-    const sheetFields = Object.keys(sheet[0]).map(this.fieldConvertor);
-    const tempObj = {};
-    for (const field of sheetFields) {
-      tempObj[field] = 1;
-    }
-
-    const configFields = Object.keys(config);
-
-    for (const field of configFields) {
-      if (!tempObj[field]) {
-        return false;
-      }
-    }
-
-    return true;
-  };
 
   /**
    * 데이터 검증
@@ -48,7 +17,7 @@ class Validator extends ValidateHandler {
    * @param options
    * @returns {{data: any[], empty_cnt: number, err_cnt: number}}
    */
-  excelValidate = (sheet, options) => {
+  validation = (sheet, options) => {
     const hasFields = this._fieldValidation(this.config, sheet);
     if (!hasFields) {
       throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
@@ -169,75 +138,28 @@ class Validator extends ValidateHandler {
   };
 
   /**
-   * 병합된 헤더가 존재하는지 체크 및 데이터 가공
-   * @param workSheet
-   * @returns {unknown[]|*[]}
+   * 유효한 필드인지 검증
+   * @param config
+   * @param sheet
+   * @returns {boolean}
+   * @private
    */
-  headerFilter = (workSheet) => {
-    let data = XLSX.utils.sheet_to_json(workSheet, {
-      defval: "",
-      dateNF: "yyyy-mm-dd hh:mm:ss",
-      header: 1,
-      raw: false,
-      blankrows: false,
-    });
+  _fieldValidation = (config, sheet) => {
+    const sheetFields = Object.keys(sheet[0]).map(this.fieldConvertor);
+    const tempObj = {};
+    for (const field of sheetFields) {
+      tempObj[field] = 1;
+    }
 
-    let isEmpty = false;
+    const configFields = Object.keys(config);
 
-    for (const row of data[0]) {
-      if (!row) {
-        isEmpty = true;
-        break;
+    for (const field of configFields) {
+      if (!tempObj[field]) {
+        return false;
       }
     }
 
-    if (isEmpty) {
-      const objKeys = data[0];
-      let prev = "";
-      for (let i = 0; i < objKeys.length; i++) {
-        const cur = objKeys[i];
-
-        if (!!cur && !!data[1][i]) {
-          if (cur === "SQL") {
-            objKeys[i] = data[1][i] + cur;
-            prev = cur;
-            continue;
-          }
-
-          objKeys[i] += data[1][i];
-
-          prev = cur;
-        } else if (!cur && data[1][i]) {
-          if (cur === "SQL" || prev === "SQL") {
-            objKeys[i] = data[1][i] + prev;
-            continue;
-          }
-          objKeys[i] = prev + data[1][i];
-        }
-      }
-
-      const newObjKeys = objKeys.map(this.fieldConvertor);
-
-      const newData = [];
-
-      for (let i = 2; i < data.length; i++) {
-        const obj = {};
-        for (let j = 0; j < newObjKeys.length; j++) {
-          obj[newObjKeys[j]] = data[i][j];
-        }
-
-        newData.push(obj);
-      }
-
-      return newData;
-    } else {
-      return XLSX.utils.sheet_to_json(workSheet, {
-        defval: "",
-        dateNF: "yyyy-mm-dd hh:mm:ss",
-        raw: false,
-        blankrows: false,
-      });
-    }
+    return true;
   };
 
   /**
@@ -263,7 +185,7 @@ class Validator extends ValidateHandler {
       if (config.column === "_id") {
         /**
          * _id가 없으면 new ObjectID().toString()
-         * if (!config.refer) config.refer + row[key]
+         * if (!validateConfigs.refer) validateConfigs.refer + row[key]
          * else
          */
 
@@ -318,7 +240,7 @@ class Validator extends ValidateHandler {
           data[config.column] = !row[key] ? [] : stringSplit;
           break;
         default:
-          // console.log(config.dataType);
+          // console.log(validateConfigs.dataType);
           throw new Error("유효하지 않은 타입입니다.");
       }
     }
@@ -327,6 +249,98 @@ class Validator extends ValidateHandler {
   }
 }
 
+function isInvaliedFile(fileInfo) {
+  if (!fileInfo) {
+    throw new Error("No file content uploaded");
+  }
+
+  const { originalname, size, filename } = fileInfo;
+
+  if (originalname.split(".").at(-1) !== "xlsx") {
+    throw new Error("엑셀 파일이 아닙니다");
+  }
+
+  if (size > this.MAX_FILE_SIZE) {
+    throw new Error("최대 3MB 까지 가능합니다.");
+  }
+
+  return { originalname, size, filename };
+}
+
+/**
+ * 병합된 헤더가 존재하는지 체크 및 데이터 가공
+ * @param workSheet
+ * @returns {unknown[]|*[]}
+ */
+headerFilter = (workSheet) => {
+  let data = XLSX.utils.sheet_to_json(workSheet, {
+    defval: "",
+    dateNF: "yyyy-mm-dd hh:mm:ss",
+    header: 1,
+    raw: false,
+    blankrows: false,
+  });
+
+  let isEmpty = false;
+
+  for (const row of data[0]) {
+    if (!row) {
+      isEmpty = true;
+      break;
+    }
+  }
+
+  if (isEmpty) {
+    const objKeys = data[0];
+    let prev = "";
+    for (let i = 0; i < objKeys.length; i++) {
+      const cur = objKeys[i];
+
+      if (!!cur && !!data[1][i]) {
+        if (cur === "SQL") {
+          objKeys[i] = data[1][i] + cur;
+          prev = cur;
+          continue;
+        }
+
+        objKeys[i] += data[1][i];
+
+        prev = cur;
+      } else if (!cur && data[1][i]) {
+        if (cur === "SQL" || prev === "SQL") {
+          objKeys[i] = data[1][i] + prev;
+          continue;
+        }
+        objKeys[i] = prev + data[1][i];
+      }
+    }
+
+    const newObjKeys = objKeys.map(this.fieldConvertor);
+
+    const newData = [];
+
+    for (let i = 2; i < data.length; i++) {
+      const obj = {};
+      for (let j = 0; j < newObjKeys.length; j++) {
+        obj[newObjKeys[j]] = data[i][j];
+      }
+
+      newData.push(obj);
+    }
+
+    return newData;
+  } else {
+    return XLSX.utils.sheet_to_json(workSheet, {
+      defval: "",
+      dateNF: "yyyy-mm-dd hh:mm:ss",
+      raw: false,
+      blankrows: false,
+    });
+  }
+};
+
 module.exports = {
   Validator,
+  isInvaliedFile,
+  headerFilter,
 };

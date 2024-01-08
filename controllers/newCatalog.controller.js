@@ -2,30 +2,25 @@ const path = require("path");
 const XLSX = require("xlsx");
 const moment = require("moment");
 const fs = require("fs");
-const { Validator } = require("../common/utils/validate/validator");
-const { users } = require("../common/utils/data/users");
 const { client } = require("../config/mongo");
+const { users } = require("../data/users");
+const {
+  Validator,
+  isInvaliedFile,
+  headerFilter,
+} = require("../packages/validator");
 const {
   reportConfig,
-} = require("../common/utils/validate/config/report.config");
-// const {
-//   reportColumnConfig,
-// } = require("../common/utils/validate/config/report_column.config");;
-const {
+  reportColumnConfig,
   interfaceConfig,
-} = require("../common/utils/validate/config/interface.config");
+} = require("../common/utils/validateConfigs");
 require("dotenv").config();
 
 const { FILE_ROOT } = process.env;
 
-const {
-  excelValidate: reportValidate,
-  headerFilter,
-  insertData: insertReport,
-} = new Validator(reportConfig);
-// const { excelValidate: reportColumnValidate, insertData: insertReportColumn } = new Validator(reportColumnConfig);
-const { excelValidate: interfaceValidate, insertData: insertInterface } =
-  new Validator(interfaceConfig);
+const reportValidator = new Validator(reportConfig);
+// const reportColumnValidator = new Validator(reportColumnConfig);
+const interfaceValidator = new Validator(interfaceConfig);
 
 const db = client.db("dp");
 
@@ -34,22 +29,9 @@ const ASSET_TYPE = "report";
 // report
 const DataReportUpload = async (req, res) => {
   try {
-    const { originalname, size, filename: name } = req.file;
+    const { originalname, filename: name } = isInvaliedFile(req.file);
 
-    if (!req.file) {
-      throw new Error("No file content uploaded");
-    }
-
-    if (originalname.split(".").at(-1) !== "xlsx") {
-      throw new Error("엑셀 파일이 아닙니다");
-    }
-
-    const MAX_FILE_SIZE = 1024 * 1024 * 3;
-    if (size > MAX_FILE_SIZE) {
-      throw new Error("최대 3MB 까지 가능합니다.");
-    }
-
-    let excelPath = path.join(FILE_ROOT, name);
+    let excelPath = path.join(`${FILE_ROOT}/tmp`, name);
 
     const workBook = XLSX.readFile(excelPath, {
       type: "binary",
@@ -96,10 +78,14 @@ const DataReportUpload = async (req, res) => {
     };
 
     options.asset_type = ASSET_TYPE;
-    const { data: result, err_cnt, empty_cnt } = reportValidate(data, options);
+    const {
+      data: result,
+      err_cnt,
+      empty_cnt,
+    } = reportValidator.validation(data, options);
 
     options.asset_type = `${ASSET_TYPE}_column`;
-    // const { data: column_data } = reportColumnValidate(column, options);
+    // const { data: column_data } = reportColumnValidator.validation(column, options);
 
     const sendData = {
       file_name: originalname,
@@ -112,7 +98,7 @@ const DataReportUpload = async (req, res) => {
 
     res.status(200).json({ data: sendData });
   } catch (err) {
-    console.error(err);
+    res.status(400).json({ err });
   }
 };
 
@@ -122,33 +108,20 @@ const ReportDataUpdateFile = async (req, res) => {
 
     const Dpasset = db.collection("dpasset");
 
-    await insertReport(file_id, Dpasset);
+    await reportValidator.insertData(file_id, Dpasset);
 
     res.status(200).send("SUCCESS");
   } catch (err) {
-    console.error(err);
+    res.status(400).json({ err });
   }
 };
 
 // interface
 const DataInterfaceUpload = async (req, res) => {
   try {
-    const { originalname, size, filename: name } = req.file;
+    const { originalname, filename: name } = isInvaliedFile(req.file);
 
-    if (!req.file) {
-      throw new Error("No file content uploaded");
-    }
-
-    if (originalname.split(".").at(-1) !== "xlsx") {
-      throw new Error("엑셀 파일이 아닙니다");
-    }
-
-    const MAX_FILE_SIZE = 1024 * 1024 * 3;
-    if (size > MAX_FILE_SIZE) {
-      throw new Error("최대 3MB 까지 가능합니다.");
-    }
-
-    let excelPath = path.join(FILE_ROOT, name);
+    let excelPath = path.join(`${FILE_ROOT}/tmp`, name);
 
     const workBook = XLSX.readFile(excelPath, {
       type: "binary",
@@ -184,7 +157,7 @@ const DataInterfaceUpload = async (req, res) => {
       data: resultData,
       err_cnt,
       empty_cnt,
-    } = interfaceValidate(data, options);
+    } = interfaceValidator.validation(data, options);
     // const { column_data } = interfaceColumnValidate(column, options);
 
     const sendData = {
@@ -199,12 +172,14 @@ const DataInterfaceUpload = async (req, res) => {
 
     res.status(200).json({ data: sendData });
   } catch (err) {
-    throw new Error(err);
+    res.status(400).json({ err });
   }
 };
 
 const InterfaceDataUpdateFile = async (req, res) => {
   try {
+    throw new Error("개발중입니다.");
+
     const db = loopback.mongoClient.db("dp");
     const collection = db.collection("dpasset");
     const fileRoot = loopback.dataSources.fileData.settings.root;
@@ -352,7 +327,7 @@ const InterfaceDataUpdateFile = async (req, res) => {
       res.redirect("../InterfaceSync");
     }
   } catch (err) {
-    throw new Error(err);
+    res.status(400).json({ err });
   }
 };
 

@@ -1,16 +1,22 @@
 const path = require("path");
 const XLSX = require("xlsx");
-const { Validator } = require("../common/utils/validate/validator");
-const { users } = require("../common/utils/data/users");
+const ExcelJS = require("exceljs");
+const {
+  Validator,
+  isInvaliedFile,
+  headerFilter,
+} = require("../packages/validator");
+const { users } = require("../data/users");
 const { client } = require("../config/mongo");
 const {
   dpTermConfig,
-} = require("../common/utils/validate/config/dp_term.config");
+} = require("../common/utils/validateConfigs/dp_term.config");
+const fs = require("fs");
 require("dotenv").config();
 
 const { FILE_ROOT } = process.env;
 
-const { excelValidate, headerFilter, insertData } = new Validator(dpTermConfig);
+const termValidator = new Validator(dpTermConfig);
 
 const db = client.db("dp");
 
@@ -18,22 +24,9 @@ const ASSET_TYPE = "dp_term";
 
 async function uploadXls(req, res, next) {
   try {
-    const { originalname, size, filename: name } = req.file;
+    const { originalname, filename: name } = isInvaliedFile(req.file);
 
-    if (!req.file) {
-      throw new Error("No file content uploaded");
-    }
-
-    if (originalname.split(".").at(-1) !== "xlsx") {
-      throw new Error("엑셀 파일이 아닙니다");
-    }
-
-    const MAX_FILE_SIZE = 1024 * 1024 * 3;
-    if (size > MAX_FILE_SIZE) {
-      throw new Error("최대 3MB 까지 가능합니다.");
-    }
-
-    let excelPath = path.join(FILE_ROOT, name);
+    let excelPath = path.join(`${FILE_ROOT}/tmp`, name);
 
     const workBook = XLSX.readFile(excelPath, {
       type: "binary",
@@ -83,7 +76,7 @@ async function uploadXls(req, res, next) {
       data: resultData,
       err_cnt,
       empty_cnt,
-    } = excelValidate(data, options);
+    } = termValidator.validation(data, options);
 
     const result = {
       file_name: originalname,
@@ -95,7 +88,7 @@ async function uploadXls(req, res, next) {
 
     res.status(201).json({ data: result });
   } catch (err) {
-    console.error(err);
+    res.status(400).json({ err });
   }
 }
 
@@ -105,12 +98,46 @@ async function DataUpdateFile(req, res, next) {
 
     const Dpasset = db.collection("dpasset");
 
-    await insertData(file_id, Dpasset);
+    await termValidator.insertData(file_id, Dpasset);
 
     res.status(200).send("SUCCESS");
   } catch (err) {
-    console.error(err);
+    res.status(400).json({ err });
   }
 }
 
-module.exports = { uploadXls, DataUpdateFile };
+async function listDownload(req, res, next) {
+  try {
+    const { filename: name } = isInvaliedFile(req.file);
+
+    const guidePath = path.join(FILE_ROOT, "businessFormGuide.xlsx");
+
+    const excelPath = path.join(`${FILE_ROOT}/tmp`, name);
+    const resultPath = path.join(`${FILE_ROOT}/tmp`, "result.xlsx");
+
+    const workbook = new ExcelJS.Workbook();
+    const resultWorkbook = new ExcelJS.Workbook();
+
+    await Promise.all([
+      workbook.xlsx.readFile(excelPath),
+      resultWorkbook.xlsx.readFile(guidePath),
+    ]);
+
+    const copyWorksheet = workbook.getWorksheet(2);
+
+    const addWorksheet = resultWorkbook.addWorksheet("비즈니스 용어");
+
+    copyWorksheet.eachRow((row) => {
+      addWorksheet.addRow(row.values);
+    });
+
+    await resultWorkbook.xlsx.writeFile(resultPath); // 결과 파일로 저장
+
+    res.status(200).json({ msg: "success" });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ err });
+  }
+}
+
+module.exports = { uploadXls, DataUpdateFile, listDownload };
