@@ -154,7 +154,7 @@ class ValidateHandler {
       }
     }
 
-    if (!checkObj[data.trim()]) {
+    if (!checkObj[data.trim()] && !checkObj.includes(data.trim())) {
       return [this._err(key, data, errType), data];
     }
 

@@ -9,6 +9,7 @@ const {
   ReportDataUpdateFile,
   DataInterfaceUpload,
   InterfaceDataUpdateFile,
+  InterfaceSync,
 } = newCatalogController;
 
 // report
@@ -18,5 +19,6 @@ router.post("/ReportDataUpdateFile", ReportDataUpdateFile);
 // interface
 router.post("/DataInterfaceUpload", upload.single("file"), DataInterfaceUpload);
 router.post("/InterfaceDataUpdateFile", InterfaceDataUpdateFile);
+router.post("/InterfaceSync", InterfaceSync);
 
 module.exports = router;

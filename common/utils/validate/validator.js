@@ -33,6 +33,9 @@ class Validator extends ValidateHandler {
 
     const configFields = Object.keys(config);
 
+    console.log(sheetFields);
+    console.log(configFields);
+
     for (const field of configFields) {
       if (!tempObj[field]) {
         return false;
@@ -318,6 +321,7 @@ class Validator extends ValidateHandler {
           data[config.column] = !row[key] ? [] : stringSplit;
           break;
         default:
+          console.log(config.dataType);
           throw new Error("유효하지 않은 타입입니다.");
       }
     }

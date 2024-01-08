@@ -41,7 +41,9 @@ module.exports.interfaceConfig = {
   인터페이스ID: {
     type: "none",
     required: true,
-    column: "dataset_id",
+    unique: true,
+    column: "_id", // + dataset_id
+    refer: "IF.",
     dataType: "string",
   },
   인터페이스명: {
@@ -190,14 +192,16 @@ module.exports.interfaceConfig = {
     dataType: "string",
   },
   시작일: {
-    type: "none",
+    type: "regex",
     required: false,
+    regex: /^\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$/,
     column: "start_time",
-    dataType: "date",
+    dataType: "string",
   },
   종료일: {
-    type: "none",
+    type: "regex",
     required: false,
+    regex: /^\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$/,
     column: "emd_time",
     dataType: "string",
   },
@@ -248,8 +252,9 @@ module.exports.interfaceConfig = {
     dataType: "string",
   },
   작성일: {
-    type: "none",
+    type: "regex",
     required: true,
+    regex: /^\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$/,
     column: "create_time",
     dataType: "string",
   },

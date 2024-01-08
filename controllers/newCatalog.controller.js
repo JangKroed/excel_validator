@@ -1,16 +1,19 @@
 const path = require("path");
 const XLSX = require("xlsx");
 const moment = require("moment");
+const fs = require("fs");
 const { Validator } = require("../common/utils/validate/validator");
 const { users } = require("../common/utils/data/users");
 const { client } = require("../config/mongo");
 const {
   reportConfig,
 } = require("../common/utils/validate/config/report.config");
-const fs = require("fs");
 // const {
 //   reportColumnConfig,
 // } = require("../common/utils/validate/config/report_column.config");;
+const {
+  interfaceConfig,
+} = require("../common/utils/validate/config/interface.config");
 require("dotenv").config();
 
 const { FILE_ROOT } = process.env;
@@ -21,11 +24,14 @@ const {
   insertData: insertReport,
 } = new Validator(reportConfig);
 // const { excelValidate: reportColumnValidate, insertData: insertReportColumn } = new Validator(reportColumnConfig);
+const { excelValidate: interfaceValidate, insertData: insertInterface } =
+  new Validator(interfaceConfig);
 
 const db = client.db("dp");
 
 const ASSET_TYPE = "report";
 
+// report
 const DataReportUpload = async (req, res) => {
   try {
     const { originalname, size, filename: name } = req.file;
@@ -124,85 +130,74 @@ const ReportDataUpdateFile = async (req, res) => {
   }
 };
 
+// interface
 const DataInterfaceUpload = async (req, res) => {
   try {
-    let FileData = loopback.models["FileData"];
-    const fileRoot = loopback.dataSources.fileData.settings.root;
-    let dirPath = path.join(fileRoot, "tmp");
-    if (!fs.existsSync(dirPath, { recursive: true })) {
-      fs.mkdirSync(dirPath);
+    const { originalname, size, filename: name } = req.file;
+
+    if (!req.file) {
+      throw new Error("No file content uploaded");
     }
-    let re = await FileData.fileUpload("tmp", req, res);
-    logger.info(fileRoot);
-    // logger.info(JSON.stringify(re));
-    if (re.files.file[0].originalFilename.split(".").pop() != "xlsx") {
+
+    if (originalname.split(".").at(-1) !== "xlsx") {
       throw new Error("엑셀 파일이 아닙니다");
-    } else {
-      let fileKey;
-      let fileInfo;
-      let result;
-      fileKey = Object.keys(re.files)[0];
-      fileInfo = re.files[fileKey][0];
-      let excelPath = path.join(fileRoot, fileInfo.container, fileInfo.name);
-
-      if (global.drmUse) {
-        let drm_excelPath = path.join(
-          fileRoot,
-          fileInfo.container,
-          "extract_" + fileInfo.name,
-        );
-
-        let drmResult = await drm.extract(excelPath, drm_excelPath);
-        logger.info(drmResult);
-        if (drmResult.result) {
-          excelPath = drmResult.stdout.split(",")[1];
-        } else {
-          throw new Error(
-            drmResult.stderr
-              ? drmResult.stderr
-              : "DRM 복호화에 실패 하였습니다.",
-          );
-        }
-      }
-
-      const workBook = XLSX.readFile(excelPath, {
-        type: "binary",
-        cellDates: true,
-        cellNF: false,
-        cellText: true,
-      });
-      if (workBook.SheetNames.length != 2) {
-        throw new Error("포맷이 틀립니다 인터페이스, 항목 으로 구성해주세요");
-      } else {
-        let data = XLSX.utils.sheet_to_json(
-          workBook.Sheets[workBook.SheetNames[0]],
-          {
-            header: 1,
-            raw: false,
-            blankrows: false,
-          },
-        );
-        let column = XLSX.utils.sheet_to_json(
-          workBook.Sheets[workBook.SheetNames[1]],
-          {
-            header: 1,
-            raw: false,
-            blankrows: false,
-          },
-        );
-
-        result = await DataInterfaceUploadCheck(data, column, "validate");
-      }
-      return {
-        file_name: fileInfo.originalFilename,
-        file_id: fileInfo.name,
-        data: result.data,
-        column_data: result.column,
-        warn_cnt: result.warn_cnt,
-        err_cnt: result.err_cnt,
-        empty_cnt: result.empty_cnt,
-      };
     }
+
+    const MAX_FILE_SIZE = 1024 * 1024 * 3;
+    if (size > MAX_FILE_SIZE) {
+      throw new Error("최대 3MB 까지 가능합니다.");
+    }
+
+    let excelPath = path.join(FILE_ROOT, name);
+
+    const workBook = XLSX.readFile(excelPath, {
+      type: "binary",
+      cellDates: true,
+      cellNF: false,
+      cellText: false,
+    });
+
+    if (workBook.SheetNames.length !== 2) {
+      throw new Error("포맷이 틀립니다 인터페이스, 항목 으로 구성해주세요");
+      // return Promise.reject("포맷이 틀립니다 인터페이스, 항목 으로 구성해주세요");
+    }
+
+    let data = headerFilter(workBook.Sheets[workBook.SheetNames[0]]);
+    // let column = headerFilter(workBook.Sheets[workBook.SheetNames[1]]);
+
+    const Dpasset = db.collection("dpasset");
+    const refer = await Dpasset.aggregate([
+      { $match: { asset_type: "interface" } },
+      { $project: { _id: 1 } },
+      { $project: { _id: { $objectToArray: "$$ROOT" } } },
+      { $unwind: "$_id" },
+      { $group: { _id: "$_id.v" } },
+    ]).toArray();
+
+    const options = {
+      refer: refer.map((e) => e._id),
+      user: users,
+    };
+
+    options.asset_type = "interface";
+    const {
+      data: resultData,
+      err_cnt,
+      empty_cnt,
+    } = interfaceValidate(data, options);
+    // const { column_data } = interfaceColumnValidate(column, options);
+
+    const sendData = {
+      file_name: originalname,
+      file_id: name,
+      data: resultData,
+      // column_data,
+      // warn_cnt: warn_cnt,
+      err_cnt,
+      empty_cnt,
+    };
+
+    res.status(200).json({ data: sendData });
   } catch (err) {
     throw new Error(err);
   }
@@ -276,86 +271,194 @@ const InterfaceDataUpdateFile = async (req, res) => {
           item["updated"] = date.toDate();
           // if((item.table_dataset_ids && item.table_dataset_ids.length > 0) || item.file_name){
           /*if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
-                                          if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
-                                            item.table_dataset_ids.forEach(function(table_dataset_id){
-                                              let inert_if_obj = NewCatalog.setOracleInterIf(item, table_dataset_id, table_system_obj);
-                                              inert_if_obj['UPD_GBN']='MOD';
-                                              inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                              inert_if_obj['AVAL_END_DT']='99991231235959';
-                                              if(inert_if_obj.TBL_NM){
-                                                oracle_interface_insert.push(inert_if_obj);
-                                              }
-                                            });
-                                          }else{
-                                            let inert_if_obj = NewCatalog.setOracleInterIf(item, null, null);
-                                            inert_if_obj['UPD_GBN']='MOD';
-                                            inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                            inert_if_obj['AVAL_END_DT']='99991231235959';
-                                            if(inert_if_obj.TBL_NM){
-                                              oracle_interface_insert.push(inert_if_obj);
-                                            }
-                                          }
-                                          item.childs.forEach(function(child){
-                                            let inert_if_detail_obj = NewCatalog.setOracleInterIfDetail(child);
-                                            inert_if_detail_obj['UPD_GBN']='MOD';
-                                            inert_if_detail_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                            inert_if_detail_obj['AVAL_END_DT']='99991231235959';
-                                            oracle_interface_column_insert.push(inert_if_detail_obj);
-                                          });
-                                        }*/
+                                                                                                                                                                  if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
+                                                                                                                                                                    item.table_dataset_ids.forEach(function(table_dataset_id){
+                                                                                                                                                                      let inert_if_obj = NewCatalog.setOracleInterIf(item, table_dataset_id, table_system_obj);
+                                                                                                                                                                      inert_if_obj['UPD_GBN']='MOD';
+                                                                                                                                                                      inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                      inert_if_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                      if(inert_if_obj.TBL_NM){
+                                                                                                                                                                        oracle_interface_insert.push(inert_if_obj);
+                                                                                                                                                                      }
+                                                                                                                                                                    });
+                                                                                                                                                                  }else{
+                                                                                                                                                                    let inert_if_obj = NewCatalog.setOracleInterIf(item, null, null);
+                                                                                                                                                                    inert_if_obj['UPD_GBN']='MOD';
+                                                                                                                                                                    inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                    inert_if_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                    if(inert_if_obj.TBL_NM){
+                                                                                                                                                                      oracle_interface_insert.push(inert_if_obj);
+                                                                                                                                                                    }
+                                                                                                                                                                  }
+                                                                                                                                                                  item.childs.forEach(function(child){
+                                                                                                                                                                    let inert_if_detail_obj = NewCatalog.setOracleInterIfDetail(child);
+                                                                                                                                                                    inert_if_detail_obj['UPD_GBN']='MOD';
+                                                                                                                                                                    inert_if_detail_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                    inert_if_detail_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                    oracle_interface_column_insert.push(inert_if_detail_obj);
+                                                                                                                                                                  });
+                                                                                                                                                                }*/
           await collection.updateOne({ _id: item._id }, { $set: item });
         } else {
           //없으면 추가
           item["registered"] = date.toDate();
           // if((item.table_dataset_ids && item.table_dataset_ids.length > 0) || item.file_name){
           /*if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
-                                          if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
-                                            item.table_dataset_ids.forEach(function(table_dataset_id){
-                                              let inert_if_obj = NewCatalog.setOracleInterIf(item, table_dataset_id, table_system_obj);
-                                              inert_if_obj['UPD_GBN']='ADD';
-                                              inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                              inert_if_obj['AVAL_END_DT']='99991231235959';
-                                              if(inert_if_obj.TBL_NM){
-                                                oracle_interface_insert.push(inert_if_obj);
-                                              }
-                                            });
-                                          }else{
-                                            let inert_if_obj = NewCatalog.setOracleInterIf(item, null, null);
-                                            inert_if_obj['UPD_GBN']='ADD';
-                                            inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                            inert_if_obj['AVAL_END_DT']='99991231235959';
-                                            if(inert_if_obj.TBL_NM){
-                                              oracle_interface_insert.push(inert_if_obj);
-                                            }
-                                          }
-                                          item.childs.forEach(function(child){
-                                            let inert_if_detail_obj = NewCatalog.setOracleInterIfDetail(child);
-                                            inert_if_detail_obj['UPD_GBN']='ADD';
-                                            inert_if_detail_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
-                                            inert_if_detail_obj['AVAL_END_DT']='99991231235959';
-                                            oracle_interface_column_insert.push(inert_if_detail_obj);
-                                          });
-                                        }*/
+                                                                                                                                                                  if(item.table_dataset_ids && item.table_dataset_ids.length > 0){
+                                                                                                                                                                    item.table_dataset_ids.forEach(function(table_dataset_id){
+                                                                                                                                                                      let inert_if_obj = NewCatalog.setOracleInterIf(item, table_dataset_id, table_system_obj);
+                                                                                                                                                                      inert_if_obj['UPD_GBN']='ADD';
+                                                                                                                                                                      inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                      inert_if_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                      if(inert_if_obj.TBL_NM){
+                                                                                                                                                                        oracle_interface_insert.push(inert_if_obj);
+                                                                                                                                                                      }
+                                                                                                                                                                    });
+                                                                                                                                                                  }else{
+                                                                                                                                                                    let inert_if_obj = NewCatalog.setOracleInterIf(item, null, null);
+                                                                                                                                                                    inert_if_obj['UPD_GBN']='ADD';
+                                                                                                                                                                    inert_if_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                    inert_if_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                    if(inert_if_obj.TBL_NM){
+                                                                                                                                                                      oracle_interface_insert.push(inert_if_obj);
+                                                                                                                                                                    }
+                                                                                                                                                                  }
+                                                                                                                                                                  item.childs.forEach(function(child){
+                                                                                                                                                                    let inert_if_detail_obj = NewCatalog.setOracleInterIfDetail(child);
+                                                                                                                                                                    inert_if_detail_obj['UPD_GBN']='ADD';
+                                                                                                                                                                    inert_if_detail_obj['AVAL_ST_DT']=date.tz('Asia/Seoul').format("YYYYMMDDHHmmss");
+                                                                                                                                                                    inert_if_detail_obj['AVAL_END_DT']='99991231235959';
+                                                                                                                                                                    oracle_interface_column_insert.push(inert_if_detail_obj);
+                                                                                                                                                                  });
+                                                                                                                                                                }*/
           await collection.insertOne(item);
         }
       }
       // console.log(oracle_interface_insert);
       // console.log(oracle_interface_column_insert);
       /*for(let insert of oracle_interface_insert){
-                          let insert_query = mybatisMapper.getStatement('interface', 'setDF_EXTRN_INF', insert);
-                          await oracle.excute(insert_query);
-                        }
-                        for(let insert_detail of oracle_interface_column_insert){
-                          let insert_detailquery = mybatisMapper.getStatement('interface', 'setDF_EXTRN_INF_DET', insert_detail);
-                          await oracle.excute(insert_detailquery);
-                        }
-                        if(oracle_interface_insert.length > 0 || oracle_interface_column_insert.length > 0){
-                          let apply_query = mybatisMapper.getStatement('interface', 'DF_APPLY_EXTRN_INF');
-                          await oracle.excute(apply_query);
-                        }*/
-      await NewCatalog.InterfaceSync(req, res);
-      return "SUCCESS";
+                                                                                                  let insert_query = mybatisMapper.getStatement('interface', 'setDF_EXTRN_INF', insert);
+                                                                                                  await oracle.excute(insert_query);
+                                                                                                }
+                                                                                                for(let insert_detail of oracle_interface_column_insert){
+                                                                                                  let insert_detailquery = mybatisMapper.getStatement('interface', 'setDF_EXTRN_INF_DET', insert_detail);
+                                                                                                  await oracle.excute(insert_detailquery);
+                                                                                                }
+                                                                                                if(oracle_interface_insert.length > 0 || oracle_interface_column_insert.length > 0){
+                                                                                                  let apply_query = mybatisMapper.getStatement('interface', 'DF_APPLY_EXTRN_INF');
+                                                                                                  await oracle.excute(apply_query);
+                                                                                                }*/
+      // await NewCatalog.InterfaceSync(req, res);
+      res.redirect("../InterfaceSync");
     }
+  } catch (err) {
+    throw new Error(err);
+  }
+};
+
+const InterfaceSync = async (req, res) => {
+  try {
+    const db = loopback.mongoClient.db("dp");
+    const collection = db.collection("dpasset");
+    const cursor = await collection.aggregate(
+      [
+        {
+          $match: {
+            asset_type: "interface",
+            file_name: { $nin: [null, ""] },
+            "tb_dataset_ids.0": { $exists: true },
+          },
+        },
+        { $unwind: { path: "$tb_dataset_ids" } },
+        {
+          $lookup: {
+            from: "dpasset",
+            let: { tb_dataset_ids: "$tb_dataset_ids" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$dataset_id", "$$tb_dataset_ids"] },
+                  asset_type: "table",
+                },
+              },
+            ],
+            as: "dataset",
+          },
+        },
+        { $match: { "dataset.0": { $exists: true } } },
+      ],
+      { allowDiskUse: true },
+    ); // find all
+
+    let truncate_sql = "TRUNCATE TABLE DF_EXTRN_INF_T";
+    let truncate_result = await oracle.excutePostgre(truncate_sql);
+    truncate_sql = "TRUNCATE TABLE DF_EXTRN_INF_DET_T";
+    truncate_result = await oracle.excutePostgre(truncate_sql);
+    let cnt = 0;
+    while (await cursor.hasNext()) {
+      // Iterate entire data
+      let item = await cursor.next(); // Get 1
+      let inert_if_obj = NewCatalog.setOracleInterIf(item, null, null);
+      inert_if_obj["TBL_INST_NM"] = item.dataset[0].instance_name
+        ? item.dataset[0].instance_name
+        : "";
+      inert_if_obj["SYS_NM"] = item.dataset[0].source_system_lv1
+        ? item.dataset[0].source_system_lv1
+        : "";
+      inert_if_obj["SCHEMA_NM"] = item.dataset[0].schema_name
+        ? item.dataset[0].schema_name
+        : "";
+      inert_if_obj["TBL_NM"] = item.dataset[0].name ? item.dataset[0].name : "";
+      if (
+        inert_if_obj.CAT &&
+        inert_if_obj.SCHEMA_NM &&
+        inert_if_obj.TBL_NM &&
+        inert_if_obj.SR_GBN &&
+        inert_if_obj.ITF_FILE_NM &&
+        inert_if_obj.LIVE_DEL_GBN &&
+        inert_if_obj.ITF_NM &&
+        inert_if_obj.ITF_ID
+      ) {
+        //insert
+        let insert_query = mybatisMapper.getStatement(
+          "interface",
+          "setDF_EXTRN_INF",
+          inert_if_obj,
+        );
+        await oracle.excutePostgre(insert_query);
+        cnt++;
+        for (let child of item.childs) {
+          let inert_if_detail_obj = NewCatalog.setOracleInterIfDetail(child);
+          if (
+            inert_if_detail_obj.SRC_TBL_NM &&
+            inert_if_detail_obj.SRC_NO &&
+            inert_if_detail_obj.TGT_ENG_NM &&
+            inert_if_detail_obj.TGT_KOR_NM &&
+            inert_if_detail_obj.TGT_TBL_NM &&
+            inert_if_detail_obj.INF_ID &&
+            inert_if_detail_obj.SRC_ENG_NM &&
+            inert_if_detail_obj.SRC_KOR_NM
+          ) {
+            //insert
+            let insert_detailquery = mybatisMapper.getStatement(
+              "interface",
+              "setDF_EXTRN_INF_DET",
+              inert_if_detail_obj,
+            );
+            await oracle.excutePostgre(insert_detailquery);
+          }
+        }
+      }
+    }
+    if (cnt > 0) {
+      let apply_query = mybatisMapper.getStatement(
+        "interface",
+        "DF_APPLY_EXTRN_INF",
+      );
+      await oracle.excutePostgre(apply_query);
+    }
+
+    res.status(200).send("SUCCESS");
   } catch (err) {
     throw new Error(err);
   }
@@ -366,4 +469,5 @@ module.exports = {
   ReportDataUpdateFile,
   DataInterfaceUpload,
   InterfaceDataUpdateFile,
+  InterfaceSync,
 };
