@@ -7,7 +7,7 @@ class Validator extends ValidateHandler {
   constructor(config) {
     super();
     this.config = config;
-    this.tempData = {};
+    // this.tempData = {};
     this.MAX_FILE_SIZE = 1024 * 1024 * 3;
   }
 
@@ -23,7 +23,7 @@ class Validator extends ValidateHandler {
       throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
     }
 
-    const tempTable = [];
+    // const tempTable = [];
     const uniqueTable = {};
 
     let err_cnt = 0;
@@ -98,12 +98,12 @@ class Validator extends ValidateHandler {
       result.push(temp);
 
       // if (!err_cnt && !empty_cnt && !warm_cnt) {
-      tempTable.push(this._excelDataProcessing(row, options));
+      // tempTable.push(this._excelDataProcessing(row, options));
       // }
     }
 
     // if (!err_cnt && !empty_cnt && !warm_cnt) {
-    this.tempData[options.fileId] = tempTable;
+    // this.tempData[options.fileId] = tempTable;
     // console.log(tempTable);
     // }
 
@@ -119,8 +119,8 @@ class Validator extends ValidateHandler {
   insertData = async (fileId, col) => {
     try {
       // const bulkUpdateOps = [];
-      console.log("insert!", this.tempData[fileId][0]);
-      delete this.tempData[fileId];
+      // console.log("insert!", this.tempData[fileId][0]);
+      // delete this.tempData[fileId];
       // for (const item of this.tempData[fileId]) {
       //   bulkUpdateOps.push({
       //     updateOne: {
@@ -206,6 +206,7 @@ class Validator extends ValidateHandler {
 
         if (!refer.includes(row[key])) {
           data.resistered = dateTime;
+          data.updated = dateTime;
         } else {
           data.updated = dateTime;
         }

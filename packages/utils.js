@@ -2,19 +2,48 @@ class ValidateHandler {
   constructor() {
     this.validateHandler = {
       none: this._none,
-      id: this._id,
       select: this._select,
       range: this._range,
       regex: this._regex,
+      user: this._user,
+      table: this._table,
     };
+    /**
+     * type - none, select, user, table, regex?
+     */
   }
+
+  _user = (key, data, _, option) => {
+    // return [this._err(key, data, "invalid"), data];
+
+    // option은 user 객체
+
+    const { DEPT_ID, DEPT_NM, EMAIL, USER_ID, USER_NM } = option.user;
+
+    for (const item of data.split(",")) {
+      // TODO 1 - item.split('>').length > 1
+      // TODO 2 - /email_regex/.test(item)
+      // TODO 3 - item === 'N/A'
+    }
+
+    return [null, data];
+  };
+  _table = (key, data, _, option) => {
+    // return [this._err(key, data, "invalid"), data];
+
+    return [null, data];
+  };
 
   /**
    * 필드 공백 및 괄호문자열 제거
    * @param {string} str
    * @returns {string}
    */
-  fieldConvertor = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
+  fieldConvertor = (str) =>
+    str
+      .replace(/\s/g, "")
+      .replace(/\([^)]*\)/g, "")
+      .replace("*", "");
 
   /**
    * null error message
@@ -82,17 +111,6 @@ class ValidateHandler {
    * @private
    */
   _none = (_, data) => {
-    return [null, data];
-  };
-
-  /**
-   * id type validate
-   * @param {string} _
-   * @param {string | number} data
-   * @returns {[null, string]}
-   * @private
-   */
-  _id = (_, data) => {
     return [null, data];
   };
 

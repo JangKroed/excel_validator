@@ -10,8 +10,7 @@ const { users } = require("../data/users");
 const { client } = require("../config/mongo");
 const {
   dpTermConfig,
-} = require("../common/utils/validateConfigs/dp_term.config");
-const fs = require("fs");
+} = require("../common/utils/validateConfigs/new/dp_term.config");
 require("dotenv").config();
 
 const { FILE_ROOT } = process.env;
@@ -88,6 +87,7 @@ async function uploadXls(req, res, next) {
 
     res.status(201).json({ data: result });
   } catch (err) {
+    console.error(err);
     res.status(400).json({ err });
   }
 }
@@ -96,9 +96,9 @@ async function DataUpdateFile(req, res, next) {
   try {
     const { file_id } = req.body;
 
-    const Dpasset = db.collection("dpasset");
+    const DpassetTerm = db.collection("dpasset_term");
 
-    await termValidator.insertData(file_id, Dpasset);
+    await termValidator.insertData(file_id, DpassetTerm);
 
     res.status(200).send("SUCCESS");
   } catch (err) {
@@ -110,7 +110,7 @@ async function listDownload(req, res, next) {
   try {
     const { filename: name } = isInvaliedFile(req.file);
 
-    const guidePath = path.join(FILE_ROOT, "businessFormGuide.xlsx");
+    const guidePath = path.join(FILE_ROOT, "businessForm.xlsx");
 
     const excelPath = path.join(`${FILE_ROOT}/tmp`, name);
     const resultPath = path.join(`${FILE_ROOT}/tmp`, "result.xlsx");
@@ -125,13 +125,18 @@ async function listDownload(req, res, next) {
 
     const copyWorksheet = workbook.getWorksheet(2);
 
-    const addWorksheet = resultWorkbook.addWorksheet("비즈니스 용어");
+    const addWorksheet = resultWorkbook.getWorksheet(2);
 
+    let firstRow = true;
     copyWorksheet.eachRow((row) => {
-      addWorksheet.addRow(row.values);
+      if (firstRow) {
+        firstRow = false;
+      } else {
+        addWorksheet.addRow(row.values);
+      }
     });
 
-    await resultWorkbook.xlsx.writeFile(resultPath); // 결과 파일로 저장
+    await resultWorkbook.xlsx.writeFile(resultPath);
 
     res.status(200).json({ msg: "success" });
   } catch (err) {
