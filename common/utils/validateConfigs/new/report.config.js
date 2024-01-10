@@ -48,10 +48,17 @@ module.exports.reportConfig = {
     column: "desc",
     dataType: "string",
   },
+  // data.split(',')으로 구분
+  // 입력 형식은 현업담당자(업무담당자) 형식
+  // 팀단위 입력시 본부 > 팀
+  // 개인 입력시 이메일 주소
+  // ex)
+  // 팀 - 홈쇼핑BU>우리동네GS팀(N/A)
+  // 개인 - example@gmail.com(N/A)
   현업담당자: {
     required: true,
     type: "user",
-    column: "owner_dept_id,owner_dept_name,owner_user_id,owner_name",
+    column: "owner",
     dataType: "array",
   },
   키워드: {
@@ -78,10 +85,11 @@ module.exports.reportConfig = {
     column: "etc",
     dataType: "string",
   },
-  // 항목: {
-  //   required: false,
-  //   type: "none",
-  //   column: "childs",
-  //   dataType: "array",
-  // },
+  항목: {
+    required: false,
+    type: "select",
+    checkObj: "childs",
+    column: "childs",
+    dataType: "array",
+  },
 };

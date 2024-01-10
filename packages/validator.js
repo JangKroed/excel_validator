@@ -1,5 +1,5 @@
 const { ValidateHandler } = require("./utils");
-const { ObjectID } = require("mongodb");
+const { UUID } = require("mongodb");
 const moment = require("moment");
 const XLSX = require("xlsx");
 
@@ -7,7 +7,7 @@ class Validator extends ValidateHandler {
   constructor(config) {
     super();
     this.config = config;
-    // this.tempData = {};
+    this.tempData = {};
     this.MAX_FILE_SIZE = 1024 * 1024 * 3;
   }
 
@@ -23,7 +23,7 @@ class Validator extends ValidateHandler {
       throw new Error("업로드 양식이 아닙니다. 컬럼정보를 확인해주세요.");
     }
 
-    // const tempTable = [];
+    const tempTable = [];
     const uniqueTable = {};
 
     let err_cnt = 0;
@@ -42,6 +42,18 @@ class Validator extends ValidateHandler {
 
     for (const row of sheet) {
       const temp = [[]];
+      options.test = {
+        asset_type: options.asset_type,
+        status: "검토완료",
+      };
+
+      const dateTime = new moment().toDate();
+      if (options.refer.includes(row._id)) {
+        options.test.updated = dateTime;
+      } else {
+        options.test.resistered = dateTime;
+        options.test.updated = dateTime;
+      }
 
       for (const key in row) {
         const [msg] = temp;
@@ -96,6 +108,7 @@ class Validator extends ValidateHandler {
       }
 
       result.push(temp);
+      tempTable.push(options.test);
 
       // if (!err_cnt && !empty_cnt && !warm_cnt) {
       // tempTable.push(this._excelDataProcessing(row, options));
@@ -103,7 +116,8 @@ class Validator extends ValidateHandler {
     }
 
     // if (!err_cnt && !empty_cnt && !warm_cnt) {
-    // this.tempData[options.fileId] = tempTable;
+    this.tempData[options.fileId] = tempTable;
+    console.log(this.tempData);
     // console.log(tempTable);
     // }
 
@@ -174,7 +188,7 @@ class Validator extends ValidateHandler {
 
     const dateTime = new moment().toDate();
     const data = {
-      asset_type: asset_type,
+      asset_type,
       status: "검토완료",
     };
 
@@ -184,25 +198,26 @@ class Validator extends ValidateHandler {
 
       if (config.column === "_id") {
         /**
-         * _id가 없으면 new ObjectID().toString()
+         * _id가 없으면 new UUID().toString()
          * if (!validateConfigs.refer) validateConfigs.refer + row[key]
          * else
          */
 
         if (!row[key]) {
-          row[key] = new ObjectID().toString();
+          row[key] = new UUID().toString();
         }
 
-        if (!config.refer) {
-          data._id = row[key];
-        } else {
-          data._id = config.refer + row[key];
-          data.child_descs = "";
-          data.child_names = "";
-          data.child_tags = "";
-        }
+        // if (!config.refer) {
+        //   data._id = row[key];
+        // } else {
+        //   data._id = config.refer + row[key];
+        //   data.child_descs = "";
+        //   data.child_names = "";
+        //   data.child_tags = "";
+        // }
 
-        data.dataset_id = row[key];
+        data._id = row[key];
+        // data.dataset_id = row[key];
 
         if (!refer.includes(row[key])) {
           data.resistered = dateTime;

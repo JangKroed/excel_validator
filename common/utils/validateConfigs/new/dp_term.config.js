@@ -3,7 +3,7 @@ module.exports.dpTermConfig = {
   // 없으면 추가, 수정시 용어의 ID값
   ID: {
     required: false,
-    type: "none",
+    type: "id",
     column: "_id",
     refer: null,
     dataType: "string",
@@ -30,7 +30,7 @@ module.exports.dpTermConfig = {
   현업담당자: {
     required: true,
     type: "user",
-    column: "owner_dept_id,owner_dept_name,owner_user_id,owner_name",
+    column: "owner",
     dataType: "array",
   },
   키워드: {
@@ -104,8 +104,7 @@ module.exports.dpTermConfig = {
   },
   비고: {
     required: false,
-    type: "",
-    checkObj: "",
+    type: "none",
     column: "etc",
     dataType: "string",
   },

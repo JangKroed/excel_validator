@@ -1,35 +1,149 @@
+const { UUID } = require("mongodb");
+
 class ValidateHandler {
   constructor() {
     this.validateHandler = {
+      id: this._id,
       none: this._none,
       select: this._select,
-      range: this._range,
-      regex: this._regex,
+      // range: this._range,
+      // regex: this._regex,
       user: this._user,
       table: this._table,
     };
-    /**
-     * type - none, select, user, table, regex?
-     */
   }
 
   _user = (key, data, _, option) => {
-    // return [this._err(key, data, "invalid"), data];
+    option.test.owner = [];
+    let isInvalid = false;
 
-    // option은 user 객체
+    const items = data
+      .replace(" ", "")
+      .split(",")
+      .map((str) => str.replace(/[\r\n]/g, ""));
 
-    const { DEPT_ID, DEPT_NM, EMAIL, USER_ID, USER_NM } = option.user;
+    const form = {
+      owner_dept_id: "N/A",
+      owner_user_id: "N/A",
+      it_owner_dept_id: "N/A",
+      it_owner_user_id: "N/A",
+    };
 
-    for (const item of data.split(",")) {
-      // TODO 1 - item.split('>').length > 1
-      // TODO 2 - /email_regex/.test(item)
-      // TODO 3 - item === 'N/A'
+    for (const item of items) {
+      if (isInvalid) {
+        break;
+      }
+
+      const owners = item.replace("(", ",").replace(")", "").split(",");
+
+      const { user: users } = option;
+
+      let copyForm = Object.assign({}, form);
+
+      for (let i = 0; i < owners.length; i++) {
+        const owner = owners[i].trim();
+
+        const ownerSplit = owner.split(">").map((str) => str.trim());
+
+        const re = /^[^@]+@[^@]+\.[^@]+$/;
+
+        if (owner === "N/A" || owner === "") {
+          continue;
+        } else if (re.test(owner)) {
+          let invalid_user = true;
+
+          for (const user of users) {
+            const { DEPT_ID, EMAIL, USER_ID } = user;
+
+            if (EMAIL === owner) {
+              switch (i) {
+                case 0:
+                  copyForm.owner_dept_id = DEPT_ID;
+                  copyForm.owner_user_id = USER_ID;
+                  break;
+                case 1:
+                  copyForm.it_owner_dept_id = DEPT_ID;
+                  copyForm.it_owner_user_id = USER_ID;
+                  break;
+                default:
+                  break;
+              }
+
+              invalid_user = false;
+              break;
+            }
+          }
+
+          if (invalid_user) {
+            isInvalid = true;
+            break;
+          }
+        } else if (ownerSplit.length > 1) {
+          let invalid_user = true;
+          for (const user of users) {
+            const { DEPT_ID, DEPT_FULL_NMS } = user;
+
+            if (this._isNamesEqule(ownerSplit, DEPT_FULL_NMS)) {
+              switch (i) {
+                case 0:
+                  copyForm.owner_dept_id = DEPT_ID;
+                  break;
+                case 1:
+                  copyForm.it_owner_dept_id = DEPT_ID;
+                  break;
+                default:
+                  break;
+              }
+
+              invalid_user = false;
+              break;
+            }
+          }
+
+          if (invalid_user) {
+            isInvalid = true;
+            break;
+          }
+        } else {
+          isInvalid = true;
+          break;
+        }
+      }
+
+      if (!isInvalid) {
+        option.test.owner.push(copyForm);
+      }
     }
 
-    return [null, data];
+    return isInvalid ? [this._err(key, data, "invalid"), data] : [null, data];
   };
+
+  _isNamesEqule = (a, b) => {
+    b = b.map((str) => str.replace(" ", ""));
+    return a[0] === b[0] && a.at(-1) === b.at(-1);
+  };
+
   _table = (key, data, _, option) => {
     // return [this._err(key, data, "invalid"), data];
+    const tables = option.table;
+
+    const dataset_ids = data.split(",").map((str) => String(str).trim());
+
+    // item(dataset_id)에 column_name이 포함되어 있는지 확인
+    for (const item of dataset_ids) {
+      let isInvalid = true;
+
+      for (const { dataset_id } of tables) {
+        if (item === dataset_id) {
+          isInvalid = false;
+          break;
+        }
+      }
+
+      if (isInvalid) {
+        return [this._err(key, data, "invalid"), data];
+      }
+    }
 
     return [null, data];
   };
@@ -104,13 +218,36 @@ class ValidateHandler {
   };
 
   /**
-   * none type validate
-   * @param {string} _
+   * _id type validate
+   * @param {string} key
    * @param {string | number} data
+   * @param {{[key: string]: string | array | object}} config
+   * @param {{[key: string]: string | array | object}} option
    * @returns {[null, string]}
    * @private
    */
-  _none = (_, data) => {
+  _id = (key, data, config, option) => {
+    option.test._id = !!data.toString().trim().length
+      ? data
+      : new UUID().toString();
+
+    return [null, data];
+  };
+
+  /**
+   * none type validate
+   * @param {string} key
+   * @param {string | number} data
+   * @param {{[key: string]: string | array | object}} config
+   * @param {{[key: string]: string | array | object}} option
+   * @returns {[null, string]}
+   * @private
+   */
+  _none = (key, data, config, option) => {
+    option.test[config.column] = key.includes("SQL")
+      ? data
+      : data.replace(/[\r\n]/g, "");
+
     return [null, data];
   };
 
@@ -139,10 +276,16 @@ class ValidateHandler {
    * @private
    */
   _select = (key, data, config, option) => {
+    // db insert data cashing
     if (!data) {
+      option.test[config.column] = config.column === "array" ? [] : "";
       return [null, data];
     }
 
+    option.test[config.column] =
+      config.column === "array" ? data.split(",") : data;
+
+    // validation start
     let { checkObj } = config;
 
     // checkObj가 string일 경우 option 에서 참조하므로 checkObj에 재할당
@@ -152,11 +295,9 @@ class ValidateHandler {
       }
 
       // option[checkObj]의 "123,456,789" 형식일때
-      if (this._isSplit(option[checkObj])) {
-        checkObj = option[checkObj].split(",");
-      } else {
-        checkObj = option[checkObj];
-      }
+      checkObj = this._isSplit(option[checkObj])
+        ? option[checkObj].split(",")
+        : option[checkObj];
     }
 
     let isInvalid = false;
@@ -182,6 +323,12 @@ class ValidateHandler {
     return [null, data];
   };
 
+  /**
+   * split length가 1 이상인지 ?
+   * @param target
+   * @returns {boolean}
+   * @private
+   */
   _isSplit(target) {
     return typeof target === "string" && target.split(",").length > 1;
   }
