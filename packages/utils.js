@@ -10,11 +10,14 @@ class ValidateHandler {
       // regex: this._regex,
       user: this._user,
       table: this._table,
+      column: this._column,
     };
   }
 
-  _user = (key, data, _, option) => {
-    option.test.owner = [];
+  _user = (key, data, config, option) => {
+    // dpasset.owner 빈배열 초기화
+    option.test[config.column] = [];
+
     let isInvalid = false;
 
     const items = data
@@ -35,10 +38,20 @@ class ValidateHandler {
       }
 
       const owners = item.replace("(", ",").replace(")", "").split(",");
+      if (!owners[0] && !owners[1]) {
+        isInvalid = true;
+        break;
+      }
 
       const { user: users } = option;
 
-      let copyForm = Object.assign({}, form);
+      // let copyForm = Object.assign({}, form);
+      const form = {
+        owner_dept_id: "N/A",
+        owner_user_id: "N/A",
+        it_owner_dept_id: "N/A",
+        it_owner_user_id: "N/A",
+      };
 
       for (let i = 0; i < owners.length; i++) {
         const owner = owners[i].trim();
@@ -58,12 +71,12 @@ class ValidateHandler {
             if (EMAIL === owner) {
               switch (i) {
                 case 0:
-                  copyForm.owner_dept_id = DEPT_ID;
-                  copyForm.owner_user_id = USER_ID;
+                  form.owner_dept_id = DEPT_ID;
+                  form.owner_user_id = USER_ID;
                   break;
                 case 1:
-                  copyForm.it_owner_dept_id = DEPT_ID;
-                  copyForm.it_owner_user_id = USER_ID;
+                  form.it_owner_dept_id = DEPT_ID;
+                  form.it_owner_user_id = USER_ID;
                   break;
                 default:
                   break;
@@ -86,10 +99,10 @@ class ValidateHandler {
             if (this._isNamesEqule(ownerSplit, DEPT_FULL_NMS)) {
               switch (i) {
                 case 0:
-                  copyForm.owner_dept_id = DEPT_ID;
+                  form.owner_dept_id = DEPT_ID;
                   break;
                 case 1:
-                  copyForm.it_owner_dept_id = DEPT_ID;
+                  form.it_owner_dept_id = DEPT_ID;
                   break;
                 default:
                   break;
@@ -111,7 +124,7 @@ class ValidateHandler {
       }
 
       if (!isInvalid) {
-        option.test.owner.push(copyForm);
+        option.test[config.column].push(form);
       }
     }
 
@@ -123,17 +136,16 @@ class ValidateHandler {
     return a[0] === b[0] && a.at(-1) === b.at(-1);
   };
 
-  _table = (key, data, _, option) => {
-    // return [this._err(key, data, "invalid"), data];
-    const tables = option.table;
+  _table = (key, data, config, option) => {
+    option.test[config.column] = [];
 
+    const { tables } = option;
     const dataset_ids = data.split(",").map((str) => String(str).trim());
 
-    // item(dataset_id)에 column_name이 포함되어 있는지 확인
     for (const item of dataset_ids) {
       let isInvalid = true;
 
-      for (const { dataset_id } of tables) {
+      for (const { dataset_id } of option[config.checkObj]) {
         if (item === dataset_id) {
           isInvalid = false;
           break;
@@ -146,6 +158,45 @@ class ValidateHandler {
     }
 
     return [null, data];
+  };
+
+  _column = (key, data, config, option) => {
+    option.test[config.column] = [];
+
+    let isInvalid = false;
+    const dataset_ids = data.split(",").map((str) => String(str).trim());
+
+    for (const item of dataset_ids) {
+      if (isInvalid) {
+        break;
+      }
+
+      let isInvalidColumn = false;
+
+      const index = item.lastIndexOf(".");
+
+      // [dataset_id, name]
+      const columnSplit = [
+        item.substring(0, index),
+        item.substring(index + 1, item.length),
+      ];
+
+      for (const { dataset_id, name } of option[config.checkObj]) {
+        if (this._isNamesEqule(columnSplit, [dataset_id, name])) {
+          option.test[config.column].push({ dataset_id, name });
+          isInvalidColumn = false;
+        } else {
+          isInvalidColumn = true;
+        }
+      }
+
+      if (isInvalidColumn) {
+        isInvalid = true;
+        break;
+      }
+    }
+
+    return isInvalid ? [this._err(key, data, "invalid"), data] : [null, data];
   };
 
   /**

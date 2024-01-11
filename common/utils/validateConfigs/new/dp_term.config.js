@@ -44,7 +44,8 @@ module.exports.dpTermConfig = {
   // col_dataset_ids[i].name: TB_TRUST_FT
   테이블정보: {
     required: false,
-    type: "table",
+    type: "column",
+    checkObj: "columns",
     column: "col_dataset_ids",
     dataType: "array",
   },

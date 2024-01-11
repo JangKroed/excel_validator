@@ -109,6 +109,7 @@ class Validator extends ValidateHandler {
 
       result.push(temp);
       tempTable.push(options.test);
+      console.log(options.test);
 
       // if (!err_cnt && !empty_cnt && !warm_cnt) {
       // tempTable.push(this._excelDataProcessing(row, options));
@@ -117,8 +118,7 @@ class Validator extends ValidateHandler {
 
     // if (!err_cnt && !empty_cnt && !warm_cnt) {
     this.tempData[options.fileId] = tempTable;
-    console.log(this.tempData);
-    // console.log(tempTable);
+    // console.log(this.tempData);
     // }
 
     return { data: result, err_cnt, empty_cnt };

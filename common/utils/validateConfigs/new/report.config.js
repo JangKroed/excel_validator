@@ -70,6 +70,7 @@ module.exports.reportConfig = {
   테이블정보: {
     required: false,
     type: "table",
+    checkObj: "tables",
     column: "dataset_ids",
     dataType: "array",
   },

@@ -54,16 +54,14 @@ async function uploadXls(req, res, next) {
     ]).toArray();
 
     const Dpasset = db.collection("dpasset");
-    const table = await Dpasset.aggregate([
-      { $match: { asset_type: "table" } },
-      {
-        $project: { instance_name: 1, schema_name: 1, name: 1, dataset_id: 1 },
-      },
+    const columns = await Dpasset.aggregate([
+      { $match: { asset_type: "column" } },
+      { $project: { name: 1, dataset_id: 1 } },
     ]).toArray();
 
     const options = {
       user,
-      table,
+      columns,
       fileId: name,
       refer: refer.map((e) => e._id),
       asset_type: ASSET_TYPE,
