@@ -1,20 +1,214 @@
+const { UUID } = require("mongodb");
+
 class ValidateHandler {
   constructor() {
     this.validateHandler = {
-      none: this._none,
       id: this._id,
+      none: this._none,
       select: this._select,
-      range: this._range,
-      regex: this._regex,
+      // range: this._range,
+      // regex: this._regex,
+      user: this._user,
+      table: this._table,
+      column: this._column,
     };
   }
+
+  _user = (key, data, config, option) => {
+    // dpasset.owner 빈배열 초기화
+    option.test[config.column] = [];
+
+    let isInvalid = false;
+
+    const items = data
+      .replace(" ", "")
+      .split(",")
+      .map((str) => str.replace(/[\r\n]/g, ""));
+
+    const form = {
+      owner_dept_id: "N/A",
+      owner_user_id: "N/A",
+      it_owner_dept_id: "N/A",
+      it_owner_user_id: "N/A",
+    };
+
+    for (const item of items) {
+      if (isInvalid) {
+        break;
+      }
+
+      const owners = item.replace("(", ",").replace(")", "").split(",");
+      if (!owners[0] && !owners[1]) {
+        isInvalid = true;
+        break;
+      }
+
+      const { user: users } = option;
+
+      // let copyForm = Object.assign({}, form);
+      const form = {
+        owner_dept_id: "N/A",
+        owner_user_id: "N/A",
+        it_owner_dept_id: "N/A",
+        it_owner_user_id: "N/A",
+      };
+
+      for (let i = 0; i < owners.length; i++) {
+        const owner = owners[i].trim();
+
+        const ownerSplit = owner.split(">").map((str) => str.trim());
+
+        const re = /^[^@]+@[^@]+\.[^@]+$/;
+
+        if (owner === "N/A" || owner === "") {
+          continue;
+        } else if (re.test(owner)) {
+          let invalid_user = true;
+
+          for (const user of users) {
+            const { DEPT_ID, EMAIL, USER_ID } = user;
+
+            if (EMAIL === owner) {
+              switch (i) {
+                case 0:
+                  form.owner_dept_id = DEPT_ID;
+                  form.owner_user_id = USER_ID;
+                  break;
+                case 1:
+                  form.it_owner_dept_id = DEPT_ID;
+                  form.it_owner_user_id = USER_ID;
+                  break;
+                default:
+                  break;
+              }
+
+              invalid_user = false;
+              break;
+            }
+          }
+
+          if (invalid_user) {
+            isInvalid = true;
+            break;
+          }
+        } else if (ownerSplit.length > 1) {
+          let invalid_user = true;
+          for (const user of users) {
+            const { DEPT_ID, DEPT_FULL_NMS } = user;
+
+            if (this._isNamesEqule(ownerSplit, DEPT_FULL_NMS)) {
+              switch (i) {
+                case 0:
+                  form.owner_dept_id = DEPT_ID;
+                  break;
+                case 1:
+                  form.it_owner_dept_id = DEPT_ID;
+                  break;
+                default:
+                  break;
+              }
+
+              invalid_user = false;
+              break;
+            }
+          }
+
+          if (invalid_user) {
+            isInvalid = true;
+            break;
+          }
+        } else {
+          isInvalid = true;
+          break;
+        }
+      }
+
+      if (!isInvalid) {
+        option.test[config.column].push(form);
+      }
+    }
+
+    return isInvalid ? [this._err(key, data, "invalid"), data] : [null, data];
+  };
+
+  _isNamesEqule = (a, b) => {
+    b = b.map((str) => str.replace(" ", ""));
+    return a[0] === b[0] && a.at(-1) === b.at(-1);
+  };
+
+  _table = (key, data, config, option) => {
+    option.test[config.column] = [];
+
+    const { tables } = option;
+    const dataset_ids = data.split(",").map((str) => String(str).trim());
+
+    for (const item of dataset_ids) {
+      let isInvalid = true;
+
+      for (const { dataset_id } of option[config.checkObj]) {
+        if (item === dataset_id) {
+          isInvalid = false;
+          break;
+        }
+      }
+
+      if (isInvalid) {
+        return [this._err(key, data, "invalid"), data];
+      }
+    }
+
+    return [null, data];
+  };
+
+  _column = (key, data, config, option) => {
+    option.test[config.column] = [];
+
+    let isInvalid = false;
+    const dataset_ids = data.split(",").map((str) => String(str).trim());
+
+    for (const item of dataset_ids) {
+      if (isInvalid) {
+        break;
+      }
+
+      let isInvalidColumn = false;
+
+      const index = item.lastIndexOf(".");
+
+      // [dataset_id, name]
+      const columnSplit = [
+        item.substring(0, index),
+        item.substring(index + 1, item.length),
+      ];
+
+      for (const { dataset_id, name } of option[config.checkObj]) {
+        if (this._isNamesEqule(columnSplit, [dataset_id, name])) {
+          option.test[config.column].push({ dataset_id, name });
+          isInvalidColumn = false;
+        } else {
+          isInvalidColumn = true;
+        }
+      }
+
+      if (isInvalidColumn) {
+        isInvalid = true;
+        break;
+      }
+    }
+
+    return isInvalid ? [this._err(key, data, "invalid"), data] : [null, data];
+  };
 
   /**
    * 필드 공백 및 괄호문자열 제거
    * @param {string} str
    * @returns {string}
    */
-  fieldConvertor = (str) => str.replace(/\s/g, "").replace(/\([^)]*\)/g, "");
+  fieldConvertor = (str) =>
+    str
+      .replace(/\s/g, "")
+      .replace(/\([^)]*\)/g, "")
+      .replace("*", "");
 
   /**
    * null error message
@@ -75,24 +269,36 @@ class ValidateHandler {
   };
 
   /**
-   * none type validate
-   * @param {string} _
+   * _id type validate
+   * @param {string} key
    * @param {string | number} data
+   * @param {{[key: string]: string | array | object}} config
+   * @param {{[key: string]: string | array | object}} option
    * @returns {[null, string]}
    * @private
    */
-  _none = (_, data) => {
+  _id = (key, data, config, option) => {
+    option.test._id = !!data.toString().trim().length
+      ? data
+      : new UUID().toString();
+
     return [null, data];
   };
 
   /**
-   * id type validate
-   * @param {string} _
+   * none type validate
+   * @param {string} key
    * @param {string | number} data
+   * @param {{[key: string]: string | array | object}} config
+   * @param {{[key: string]: string | array | object}} option
    * @returns {[null, string]}
    * @private
    */
-  _id = (_, data) => {
+  _none = (key, data, config, option) => {
+    option.test[config.column] = key.includes("SQL")
+      ? data
+      : data.replace(/[\r\n]/g, "");
+
     return [null, data];
   };
 
@@ -121,10 +327,16 @@ class ValidateHandler {
    * @private
    */
   _select = (key, data, config, option) => {
+    // db insert data cashing
     if (!data) {
+      option.test[config.column] = config.column === "array" ? [] : "";
       return [null, data];
     }
 
+    option.test[config.column] =
+      config.column === "array" ? data.split(",") : data;
+
+    // validation start
     let { checkObj } = config;
 
     // checkObj가 string일 경우 option 에서 참조하므로 checkObj에 재할당
@@ -134,11 +346,9 @@ class ValidateHandler {
       }
 
       // option[checkObj]의 "123,456,789" 형식일때
-      if (this._isSplit(option[checkObj])) {
-        checkObj = option[checkObj].split(",");
-      } else {
-        checkObj = option[checkObj];
-      }
+      checkObj = this._isSplit(option[checkObj])
+        ? option[checkObj].split(",")
+        : option[checkObj];
     }
 
     let isInvalid = false;
@@ -164,6 +374,12 @@ class ValidateHandler {
     return [null, data];
   };
 
+  /**
+   * split length가 1 이상인지 ?
+   * @param target
+   * @returns {boolean}
+   * @private
+   */
   _isSplit(target) {
     return typeof target === "string" && target.split(",").length > 1;
   }
